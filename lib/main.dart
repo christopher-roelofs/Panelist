@@ -1,10 +1,29 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'app/providers.dart';
+import 'data/database.dart';
 import 'home/home_screen.dart';
 
 /// `panelist [path]` opens [path] directly in the reader.
-void main(List<String> args) {
-  runApp(PanelistApp(initialPath: args.isEmpty ? null : args.first));
+Future<void> main(List<String> args) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final db = AppDatabase();
+  final fit = FitModeNotifier.parse(
+    await db.setting(FitModeNotifier.settingKey),
+  );
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        fitModeProvider.overrideWith(() => FitModeNotifier(fit)),
+      ],
+      child: PanelistApp(initialPath: args.isEmpty ? null : args.first),
+    ),
+  );
 }
 
 class PanelistApp extends StatelessWidget {
@@ -31,23 +50,23 @@ class PanelistApp extends StatelessWidget {
 
 /// Shows the home screen and, if a path was passed on the command line,
 /// immediately opens it in the reader on top.
-class _Launcher extends StatefulWidget {
+class _Launcher extends ConsumerStatefulWidget {
   const _Launcher({this.initialPath});
 
   final String? initialPath;
 
   @override
-  State<_Launcher> createState() => _LauncherState();
+  ConsumerState<_Launcher> createState() => _LauncherState();
 }
 
-class _LauncherState extends State<_Launcher> {
+class _LauncherState extends ConsumerState<_Launcher> {
   @override
   void initState() {
     super.initState();
     final path = widget.initialPath;
     if (path != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) openInReader(context, path);
+        if (mounted) unawaited(openInReader(context, ref, path));
       });
     }
   }

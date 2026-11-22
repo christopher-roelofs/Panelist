@@ -1,53 +1,87 @@
-import 'package:flutter/gestures.dart';
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../core/imaging/page_image.dart';
+import '../app/providers.dart';
 import '../core/sources/page_source.dart';
+import '../platform/window.dart';
+import 'fit_mode.dart';
+import 'reader_chrome.dart';
+import 'zoomable_page.dart';
 
 /// Full-screen single-page reader.
 ///
-/// Input: swipe, tap zones (left/right 30%), mouse wheel, keyboard
-/// (←/→, ↑/↓, Space/Shift+Space, PgUp/PgDn, Home/End, Esc).
-/// Tapping the middle toggles the overlay (title + page scrubber).
-///
-/// Owns [source] and closes it when disposed.
-class ReaderScreen extends StatefulWidget {
-  const ReaderScreen({super.key, required this.source});
+/// Owns [source] and closes it when disposed. Saves reading progress on
+/// every page turn.
+class ReaderScreen extends ConsumerStatefulWidget {
+  const ReaderScreen({super.key, required this.source, this.initialPage = 0});
 
   final PageSource source;
+  final int initialPage;
 
   @override
-  State<ReaderScreen> createState() => _ReaderScreenState();
+  ConsumerState<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-class _ReaderScreenState extends State<ReaderScreen> {
+class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   static const _preloadRadius = 2;
   static const _turnDuration = Duration(milliseconds: 220);
+  static const _doubleTapWindow = Duration(milliseconds: 250);
 
-  final _controller = PageController();
-  int _page = 0;
+  late final PageController _controller;
+  late int _page;
   bool _chromeVisible = false;
-  Size _decodeSize = Size.zero;
-  DateTime _lastWheelTurn = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _locked = false; // current page is zoomed/pannable
+  Size _viewport = Size.zero;
+  Timer? _singleTapTimer;
+  final _pageKeys = <int, GlobalKey<ZoomablePageState>>{};
 
   PageSource get _src => widget.source;
+  ZoomablePageState? get _current => _pageKeys[_page]?.currentState;
+
+  static bool get _isMobile => Platform.isAndroid || Platform.isIOS;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = widget.initialPage.clamp(0, _src.pageCount - 1);
+    _controller = PageController(initialPage: _page);
+    unawaited(setWindowTitle('${_src.title} — Panelist'));
+    if (_isMobile) {
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
+      );
+    }
+  }
 
   @override
   void dispose() {
+    _singleTapTimer?.cancel();
     _controller.dispose();
-    _src.close();
+    unawaited(_src.close());
+    unawaited(setWindowTitle('Panelist'));
+    if (_isMobile) {
+      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    }
     super.dispose();
   }
 
+  // ---------------------------------------------------------------------------
+  // Navigation
+
   void _goTo(int page, {bool animate = true}) {
     final target = page.clamp(0, _src.pageCount - 1);
-    if (target == _page && _controller.hasClients) return;
+    if (target == _page) return;
     if (animate && (target - _page).abs() == 1) {
-      _controller.animateToPage(
-        target,
-        duration: _turnDuration,
-        curve: Curves.easeOutCubic,
+      unawaited(
+        _controller.animateToPage(
+          target,
+          duration: _turnDuration,
+          curve: Curves.easeOutCubic,
+        ),
       );
     } else {
       _controller.jumpToPage(target);
@@ -57,72 +91,117 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void _next() => _goTo(_page + 1);
   void _prev() => _goTo(_page - 1);
 
+  /// Scrolls the current page by [fraction] of the viewport height in
+  /// direction [dir], or turns the page if it's already at that edge.
+  void _scrollOrTurn(int dir, double fraction) {
+    final dy = dir * fraction * _viewport.height;
+    final scrolled = _current?.scrollBy(dy, animate: true) ?? false;
+    if (!scrolled) _goTo(_page + dir);
+  }
+
   void _onPageChanged(int page) {
-    setState(() => _page = page);
+    setState(() {
+      _page = page;
+      _locked = false; // the new page reports its own state
+    });
+    _pageKeys.removeWhere((i, _) => (i - page).abs() > _preloadRadius + 2);
+    unawaited(ref.read(databaseProvider).saveProgress(_src.id, page));
     _preload(page);
   }
 
   void _preload(int around) {
-    if (_decodeSize == Size.zero) return;
+    if (_viewport == Size.zero) return;
+    final fit = ref.read(fitModeProvider);
+    final physical = _viewport * MediaQuery.devicePixelRatioOf(context);
     for (var d = 1; d <= _preloadRadius; d++) {
       for (final i in [around + d, around - d]) {
         if (i < 0 || i >= _src.pageCount) continue;
         // Errors are ignored here; the page shows them when it's visited.
-        precacheImage(
-          pageImageAt(_src, i, _decodeSize),
-          context,
-          onError: (_, _) {},
+        unawaited(
+          precacheImage(
+            pageProvider(_src, i, fit, physical),
+            context,
+            onError: (_, _) {},
+          ),
         );
       }
     }
   }
 
-  void _onPointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent) return;
-    // Claim the event so the PageView doesn't scroll by raw pixels.
-    GestureBinding.instance.pointerSignalResolver.register(event, (e) {
-      final dy = (e as PointerScrollEvent).scrollDelta.dy;
-      if (dy == 0) return;
-      // Throttle: trackpads and free-spinning wheels emit bursts.
-      final now = DateTime.now();
-      if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 180)) {
-        return;
-      }
-      _lastWheelTurn = now;
-      dy > 0 ? _next() : _prev();
+  // ---------------------------------------------------------------------------
+  // Input
+
+  /// Edge taps turn pages immediately. In the centre, a single tap toggles
+  /// the overlay and a double tap zooms, so centre single taps wait briefly
+  /// for a possible second tap; edge taps never wait.
+  void _onTapUp(TapUpDetails d) {
+    final x = d.localPosition.dx / _viewport.width;
+    if (x < 0.3 || x > 0.7) {
+      _singleTapTimer?.cancel();
+      x < 0.3 ? _prev() : _next();
+      return;
+    }
+    if (_singleTapTimer?.isActive ?? false) {
+      _singleTapTimer!.cancel();
+      _current?.toggleZoomAt(d.globalPosition);
+      return;
+    }
+    _singleTapTimer = Timer(_doubleTapWindow, () {
+      if (mounted) setState(() => _chromeVisible = !_chromeVisible);
     });
   }
 
-  void _onTapUp(TapUpDetails d, double width) {
-    final x = d.localPosition.dx / width;
-    if (x < 0.3) {
-      _prev();
-    } else if (x > 0.7) {
-      _next();
-    } else {
-      setState(() => _chromeVisible = !_chromeVisible);
+  Future<void> _escape() async {
+    if (await isFullScreen()) {
+      await setFullScreen(false);
+    } else if (mounted) {
+      await Navigator.of(context).maybePop();
     }
   }
 
+  void _cycleFit() =>
+      ref.read(fitModeProvider.notifier).set(ref.read(fitModeProvider).next);
+
+  void _zoom(double factor) => _current?.zoomBy(factor);
+
   Map<ShortcutActivator, VoidCallback> get _shortcuts => {
     const SingleActivator(LogicalKeyboardKey.arrowRight): _next,
-    const SingleActivator(LogicalKeyboardKey.arrowDown): _next,
-    const SingleActivator(LogicalKeyboardKey.pageDown): _next,
-    const SingleActivator(LogicalKeyboardKey.space): _next,
     const SingleActivator(LogicalKeyboardKey.arrowLeft): _prev,
-    const SingleActivator(LogicalKeyboardKey.arrowUp): _prev,
-    const SingleActivator(LogicalKeyboardKey.pageUp): _prev,
-    const SingleActivator(LogicalKeyboardKey.space, shift: true): _prev,
+    const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+        _scrollOrTurn(1, 0.2),
+    const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+        _scrollOrTurn(-1, 0.2),
+    const SingleActivator(LogicalKeyboardKey.space): () =>
+        _scrollOrTurn(1, 0.9),
+    const SingleActivator(LogicalKeyboardKey.space, shift: true): () =>
+        _scrollOrTurn(-1, 0.9),
+    const SingleActivator(LogicalKeyboardKey.pageDown): () =>
+        _scrollOrTurn(1, 0.9),
+    const SingleActivator(LogicalKeyboardKey.pageUp): () =>
+        _scrollOrTurn(-1, 0.9),
     const SingleActivator(LogicalKeyboardKey.home): () =>
         _goTo(0, animate: false),
     const SingleActivator(LogicalKeyboardKey.end): () =>
         _goTo(_src.pageCount - 1, animate: false),
-    const SingleActivator(LogicalKeyboardKey.escape): () =>
-        Navigator.of(context).maybePop(),
+    const SingleActivator(LogicalKeyboardKey.equal): () => _zoom(1.25),
+    const SingleActivator(LogicalKeyboardKey.numpadAdd): () => _zoom(1.25),
+    const SingleActivator(LogicalKeyboardKey.minus): () => _zoom(0.8),
+    const SingleActivator(LogicalKeyboardKey.numpadSubtract): () => _zoom(0.8),
+    const SingleActivator(LogicalKeyboardKey.digit0): () =>
+        _current?.resetZoom(),
+    const SingleActivator(LogicalKeyboardKey.keyM): _cycleFit,
+    const SingleActivator(LogicalKeyboardKey.keyF): toggleFullScreen,
+    const SingleActivator(LogicalKeyboardKey.f11): toggleFullScreen,
+    const SingleActivator(LogicalKeyboardKey.escape): _escape,
   };
+
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
+    final fit = ref.watch(fitModeProvider);
+    ref.listen(fitModeProvider, (_, _) => _preload(_page));
+
     return CallbackShortcuts(
       bindings: _shortcuts,
       child: Focus(
@@ -131,142 +210,57 @@ class _ReaderScreenState extends State<ReaderScreen> {
           backgroundColor: Colors.black,
           body: LayoutBuilder(
             builder: (context, constraints) {
-              final dpr = MediaQuery.devicePixelRatioOf(context);
-              final size = bucketDecodeSize(constraints.biggest * dpr);
-              if (size != _decodeSize) {
-                _decodeSize = size;
-                WidgetsBinding.instance.addPostFrameCallback(
-                  (_) => _preload(_page),
-                );
+              final viewport = constraints.biggest;
+              if (viewport != _viewport) {
+                _viewport = viewport;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _preload(_page);
+                });
               }
               return Stack(
                 children: [
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTapUp: (d) => _onTapUp(d, constraints.maxWidth),
+                    onTapUp: _onTapUp,
                     child: PageView.builder(
                       controller: _controller,
+                      physics: _locked
+                          ? const NeverScrollableScrollPhysics()
+                          : null,
                       itemCount: _src.pageCount,
                       onPageChanged: _onPageChanged,
-                      itemBuilder: (context, i) => Listener(
-                        onPointerSignal: _onPointerSignal,
-                        child: _PageView(
-                          image: pageImageAt(_src, i, _decodeSize),
-                        ),
+                      itemBuilder: (context, i) => ZoomablePage(
+                        key: _pageKeys.putIfAbsent(i, GlobalKey.new),
+                        source: _src,
+                        index: i,
+                        fit: fit,
+                        viewport: viewport,
+                        isCurrent: i == _page,
+                        onLockChanged: (locked) {
+                          if (i == _page && locked != _locked) {
+                            setState(() => _locked = locked);
+                          }
+                        },
+                        onScrollPastEdge: (dir) {
+                          if (i == _page) _goTo(_page + dir);
+                        },
                       ),
                     ),
                   ),
-                  _Chrome(
+                  ReaderChrome(
                     visible: _chromeVisible,
                     title: _src.title,
                     page: _page,
                     pageCount: _src.pageCount,
+                    fit: fit,
                     onSeek: (p) => _goTo(p, animate: false),
+                    onFitChanged: ref.read(fitModeProvider.notifier).set,
                     onBack: () => Navigator.of(context).maybePop(),
                   ),
                 ],
               );
             },
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PageView extends StatelessWidget {
-  const _PageView({required this.image});
-
-  final ImageProvider image;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: Image(
-        image: image,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.medium,
-        gaplessPlayback: true,
-        frameBuilder: (context, child, frame, sync) =>
-            frame == null ? const SizedBox.shrink() : child,
-        errorBuilder: (context, error, _) => Center(
-          child: Text(
-            "Couldn't load this page\n$error",
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Chrome extends StatelessWidget {
-  const _Chrome({
-    required this.visible,
-    required this.title,
-    required this.page,
-    required this.pageCount,
-    required this.onSeek,
-    required this.onBack,
-  });
-
-  final bool visible;
-  final String title;
-  final int page;
-  final int pageCount;
-  final ValueChanged<int> onSeek;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    final bar = Colors.black.withValues(alpha: 0.75);
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedOpacity(
-        opacity: visible ? 1 : 0,
-        duration: const Duration(milliseconds: 150),
-        child: Column(
-          children: [
-            Material(
-              color: bar,
-              child: SafeArea(
-                bottom: false,
-                child: ListTile(
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: onBack,
-                  ),
-                  title: Text(title, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ),
-            const Spacer(),
-            Material(
-              color: bar,
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: pageCount > 1
-                            ? Slider(
-                                value: page.toDouble(),
-                                max: (pageCount - 1).toDouble(),
-                                divisions: pageCount - 1,
-                                onChanged: (v) => onSeek(v.round()),
-                              )
-                            : const SizedBox(height: 48),
-                      ),
-                      Text('${page + 1} / $pageCount'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

@@ -2,11 +2,16 @@
 
 #include <flutter_linux/flutter_linux.h>
 
+#include <cstring>
+
 #include "flutter/generated_plugin_registrant.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  GtkWindow* window;
+  FlMethodChannel* window_channel;
+  gboolean fullscreen;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -14,6 +19,45 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+}
+
+// Tracks fullscreen state as reported by the window manager.
+static gboolean window_state_cb(GtkWidget* widget, GdkEventWindowState* event,
+                                gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  self->fullscreen =
+      (event->new_window_state & GDK_WINDOW_STATE_FULLSCREEN) != 0;
+  return FALSE;
+}
+
+// Handles the "panelist/window" channel: isFullScreen, setFullScreen(bool),
+// setTitle(String).
+static void window_method_cb(FlMethodChannel* channel, FlMethodCall* call,
+                             gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  const gchar* method = fl_method_call_get_name(call);
+  FlValue* args = fl_method_call_get_args(call);
+  g_autoptr(FlMethodResponse) response = nullptr;
+
+  if (strcmp(method, "isFullScreen") == 0) {
+    response = FL_METHOD_RESPONSE(
+        fl_method_success_response_new(fl_value_new_bool(self->fullscreen)));
+  } else if (strcmp(method, "setFullScreen") == 0 &&
+             fl_value_get_type(args) == FL_VALUE_TYPE_BOOL) {
+    if (fl_value_get_bool(args)) {
+      gtk_window_fullscreen(self->window);
+    } else {
+      gtk_window_unfullscreen(self->window);
+    }
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(method, "setTitle") == 0 &&
+             fl_value_get_type(args) == FL_VALUE_TYPE_STRING) {
+    gtk_window_set_title(self->window, fl_value_get_string(args));
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  }
+  fl_method_call_respond(call, response, nullptr);
 }
 
 // Implements GApplication::activate.
@@ -33,7 +77,10 @@ static void my_application_activate(GApplication* application) {
   // gtk_header_bar_set_show_close_button(header_bar, TRUE);
   // gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
 
-  gtk_window_set_title(window, "panelist");
+  gtk_window_set_title(window, "Panelist");
+  self->window = window;
+  g_signal_connect(window, "window-state-event", G_CALLBACK(window_state_cb),
+                   self);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
@@ -55,6 +102,13 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  self->window_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "panelist/window", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(self->window_channel,
+                                            window_method_cb, self, nullptr);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
@@ -102,6 +156,7 @@ static void my_application_shutdown(GApplication* application) {
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  g_clear_object(&self->window_channel);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 

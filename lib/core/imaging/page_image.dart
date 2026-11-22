@@ -5,11 +5,11 @@ import 'package:material_ui/material_ui.dart';
 
 import '../sources/page_source.dart';
 
-/// [ImageProvider] for one page of a [PageSource].
+/// [ImageProvider] for one page of a [PageSource], at full resolution.
 ///
-/// Cached by (source id, page index). Always wrap it with [pageImageAt] so
-/// pages are decoded at display resolution instead of full scan resolution —
-/// a 4000px page decoded at full size costs ~64MB of RAM.
+/// Cached by (source id, page index). Wrap it in a [ResizeImage] so pages
+/// are decoded at display resolution rather than scan resolution: a 4000px
+/// page decoded at full size costs ~64MB of RAM.
 @immutable
 class PageImage extends ImageProvider<PageImage> {
   const PageImage(this.source, this.index);
@@ -46,21 +46,9 @@ class PageImage extends ImageProvider<PageImage> {
   int get hashCode => Object.hash(source.id, index);
 }
 
-/// Page [index] decoded to fit inside [target] physical pixels
-/// (aspect ratio kept, never upscaled).
-ImageProvider pageImageAt(PageSource source, int index, Size target) {
-  return ResizeImage(
-    PageImage(source, index),
-    width: target.width.round(),
-    height: target.height.round(),
-    policy: ResizeImagePolicy.fit,
-  );
-}
-
-/// Rounds a physical display size up to a coarse bucket so that small window
-/// resizes don't trigger re-decoding every page.
-Size bucketDecodeSize(Size physical) {
-  const step = 256.0;
-  double up(double v) => (v / step).ceil() * step;
-  return Size(up(physical.width), up(physical.height));
+/// Rounds a decode dimension (physical pixels) up to a coarse bucket so
+/// small window resizes don't re-decode every page.
+int bucketDimension(double physical) {
+  const step = 256;
+  return ((physical / step).ceil() * step).clamp(step, 1 << 15);
 }
