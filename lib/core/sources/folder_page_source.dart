@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' show Size;
 
 import 'package:path/path.dart' as p;
 
+import '../imaging/image_probe.dart';
+import '../metadata/comic_info.dart';
 import '../util/natural_sort.dart';
 import 'page_source.dart';
 
@@ -46,6 +50,21 @@ class FolderPageSource implements EncodedPageSource {
 
   @override
   Future<Uint8List> page(int index) => File(_pages[index]).readAsBytes();
+
+  @override
+  Future<List<Size?>> probePageSizes() async => [
+    for (final path in _pages) await probeImageFile(path),
+  ];
+
+  @override
+  Future<String?> readComicInfo() async {
+    await for (final e in _root.list(followLinks: false)) {
+      if (e is File && ComicInfo.isComicInfoName(e.path)) {
+        return utf8.decode(await e.readAsBytes(), allowMalformed: true);
+      }
+    }
+    return null;
+  }
 
   @override
   Future<void> close() async {}

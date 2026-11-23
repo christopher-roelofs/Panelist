@@ -1,12 +1,16 @@
 import 'dart:async';
-import 'dart:ffi';
+import 'dart:convert';
+import 'dart:ffi' hide Size;
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
+import 'dart:ui' show Size;
 
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 
+import '../imaging/image_probe.dart';
+import '../metadata/comic_info.dart';
 import '../util/natural_sort.dart';
 import 'fingerprint.dart';
 import 'libarchive/libarchive.dart';
@@ -29,6 +33,7 @@ class ArchivePageSource implements EncodedPageSource {
     this._dir,
     this._stopFlag,
     this._exited,
+    this._comicInfo,
   );
 
   /// Where per-book extraction directories are created. Set at startup to
@@ -42,6 +47,7 @@ class ArchivePageSource implements EncodedPageSource {
   final Directory _dir;
   final Pointer<Int32> _stopFlag; // shared with the worker
   final Future<void> _exited;
+  final String? _comicInfo;
 
   final _extracted = <int>{};
   final _waiters = <int, List<Completer<void>>>{};
@@ -56,14 +62,19 @@ class ArchivePageSource implements EncodedPageSource {
     // One port for everything, so the exit notice is ordered after the
     // worker's last message.
     final replies = ReceivePort();
-    final ready = Completer<(String, List<String>)>();
+    final ready = Completer<(String, List<String>, String?)>();
     final exited = Completer<void>();
     ArchivePageSource? source;
 
     replies.listen((msg) {
       switch (msg) {
-        case ('ready', final String fp, final List<String> names):
-          ready.complete((fp, names));
+        case (
+          'ready',
+          final String fp,
+          final List<String> names,
+          final String? info,
+        ):
+          ready.complete((fp, names, info));
         case ('page', final int i):
           source?._onExtracted(i);
         case ('failed', final String error):
@@ -95,7 +106,7 @@ class ArchivePageSource implements EncodedPageSource {
     );
 
     try {
-      final (fp, names) = await ready.future;
+      final (fp, names, info) = await ready.future;
       return source = ArchivePageSource._(
         path,
         'file:$fp',
@@ -103,6 +114,7 @@ class ArchivePageSource implements EncodedPageSource {
         dir,
         stopFlag,
         exited.future,
+        info,
       );
     } catch (_) {
       await exited.future;
@@ -126,15 +138,29 @@ class ArchivePageSource implements EncodedPageSource {
 
   @override
   Future<Uint8List> page(int index) async {
+    await _waitFor(index);
+    return File(_pagePath(index)).readAsBytes();
+  }
+
+  @override
+  Future<List<Size?>> probePageSizes() async => [
+    for (var i = 0; i < pageCount; i++)
+      await _waitFor(i).then((_) => probeImageFile(_pagePath(i))),
+  ];
+
+  @override
+  Future<String?> readComicInfo() async => _comicInfo;
+
+  String _pagePath(int index) => p.join(_dir.path, '$index');
+
+  Future<void> _waitFor(int index) async {
     RangeError.checkValidIndex(index, _names);
-    if (!_extracted.contains(index)) {
-      if (_closed) throw StateError('Source is closed');
-      if (_failure != null) throw Exception(_failure);
-      final c = Completer<void>();
-      (_waiters[index] ??= []).add(c);
-      await c.future;
-    }
-    return File(p.join(_dir.path, '$index')).readAsBytes();
+    if (_extracted.contains(index)) return;
+    if (_closed) throw StateError('Source is closed');
+    if (_failure != null) throw Exception(_failure);
+    final c = Completer<void>();
+    (_waiters[index] ??= []).add(c);
+    await c.future;
   }
 
   void _onExtracted(int i) {
@@ -227,8 +253,9 @@ void _workerMain((SendPort, String, String, int) init) {
     return;
   }
 
-  // Pass 1: list page entries (in archive order).
+  // Pass 1: list page entries (in archive order) and read ComicInfo.xml.
   final names = <String>[];
+  String? comicInfo;
   try {
     final r = ArchiveReader.open(la, path);
     try {
@@ -244,6 +271,14 @@ void _workerMain((SendPort, String, String, int) init) {
             return;
           }
           names.add(entryPath);
+        } else if (r.isFile &&
+            entryPath != null &&
+            comicInfo == null &&
+            ComicInfo.isComicInfoName(entryPath)) {
+          final bytes = BytesBuilder(copy: true);
+          r.readData((data, n) => bytes.add(data.asTypedList(n)));
+          comicInfo = utf8.decode(bytes.takeBytes(), allowMalformed: true);
+          continue; // data consumed; nothing to skip
         }
         r.skip();
       }
@@ -272,6 +307,7 @@ void _workerMain((SendPort, String, String, int) init) {
     'ready',
     fileFingerprint(path),
     [for (final i in order) names[i]],
+    comicInfo,
   ));
 
   // Pass 2: extract pages in archive order.

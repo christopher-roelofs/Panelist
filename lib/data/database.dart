@@ -14,6 +14,23 @@ class Books extends Table {
   DateTimeColumn get lastOpened => dateTime()();
   BlobColumn get cover => blob().nullable()();
 
+  // --- v2: ComicInfo.xml metadata ---
+  TextColumn get series => text().nullable()();
+  TextColumn get number => text().nullable()();
+  IntColumn get year => integer().nullable()();
+  TextColumn get writer => text().nullable()();
+  TextColumn get artist => text().nullable()();
+  TextColumn get summary => text().nullable()();
+  BoolColumn get rightToLeft => boolean().nullable()();
+
+  // --- v2: cached page sizes, JSON `[[w,h] | null, ...]` ---
+  TextColumn get pageSizes => text().nullable()();
+
+  // --- v2: per-book reader settings (null = use the global default) ---
+  TextColumn get fitMode => text().nullable()();
+  TextColumn get layoutMode => text().nullable()();
+  BoolColumn get coverAlone => boolean().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -42,7 +59,30 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        for (final column in [
+          books.series,
+          books.number,
+          books.year,
+          books.writer,
+          books.artist,
+          books.summary,
+          books.rightToLeft,
+          books.pageSizes,
+          books.fitMode,
+          books.layoutMode,
+          books.coverAlone,
+        ]) {
+          await m.addColumn(books, column);
+        }
+      }
+    },
+  );
 
   Future<Book?> book(String id) =>
       (select(books)..where((b) => b.id.equals(id))).getSingleOrNull();
@@ -84,6 +124,28 @@ class AppDatabase extends _$AppDatabase {
   Future<void> saveCover(String id, Uint8List png) => (update(
     books,
   )..where((b) => b.id.equals(id))).write(BooksCompanion(cover: Value(png)));
+
+  /// Stores ComicInfo-derived metadata. Pass the fields to set.
+  Future<void> saveMetadata(String id, BooksCompanion metadata) =>
+      (update(books)..where((b) => b.id.equals(id))).write(metadata);
+
+  Future<void> savePageSizes(String id, String json) =>
+      (update(books)..where((b) => b.id.equals(id))).write(
+        BooksCompanion(pageSizes: Value(json)),
+      );
+
+  Future<void> saveBookSettings(
+    String id, {
+    required String fitMode,
+    required String layoutMode,
+    required bool coverAlone,
+  }) => (update(books)..where((b) => b.id.equals(id))).write(
+    BooksCompanion(
+      fitMode: Value(fitMode),
+      layoutMode: Value(layoutMode),
+      coverAlone: Value(coverAlone),
+    ),
+  );
 
   Future<void> forget(String id) =>
       (delete(books)..where((b) => b.id.equals(id))).go();

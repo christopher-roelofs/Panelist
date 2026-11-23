@@ -9,8 +9,10 @@ import 'package:path/path.dart' as p;
 
 import '../app/providers.dart';
 import '../core/imaging/thumbnail.dart';
+import '../core/metadata/comic_info.dart';
 import '../core/sources/open_source.dart';
 import '../core/sources/page_source.dart';
+import '../data/book_extensions.dart';
 import '../data/database.dart';
 import '../reader/reader_screen.dart';
 
@@ -30,17 +32,31 @@ Future<void> openInReader(
     messenger?.showSnackBar(SnackBar(content: Text('$e')));
     return;
   }
-  final book = await db.recordOpened(
+  var book = await db.recordOpened(
     id: source.id,
     path: p.absolute(path),
     title: source.title,
     pageCount: source.pageCount,
   );
+  // Refresh ComicInfo metadata on every open (it's small and may change).
+  try {
+    final xml = await source.readComicInfo();
+    final info = xml == null ? null : ComicInfo.parse(xml);
+    if (info != null) {
+      await db.saveMetadata(source.id, metadataFrom(info));
+      book = (await db.book(source.id))!;
+    }
+  } on Object {
+    // Metadata is optional.
+  }
   if (book.cover == null) unawaited(_saveCover(db, source));
   await navigator.push(
     MaterialPageRoute<void>(
-      builder: (_) =>
-          ReaderScreen(source: source, initialPage: book.currentPage),
+      builder: (_) => ReaderScreen(
+        source: source,
+        book: book,
+        initialPage: book.currentPage,
+      ),
     ),
   );
 }
@@ -85,7 +101,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (!exists) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('"${book.title}" was moved or deleted.'),
+          content: Text('"${book.displayTitle}" was moved or deleted.'),
           action: SnackBarAction(
             label: 'Remove',
             onPressed: () => ref.read(databaseProvider).forget(book.id),
@@ -308,7 +324,7 @@ class _BookTile extends StatelessWidget {
           LinearProgressIndicator(value: progress, minHeight: 3),
           const SizedBox(height: 6),
           Text(
-            book.title,
+            book.displayTitle,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyMedium,

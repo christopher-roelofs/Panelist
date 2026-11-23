@@ -2,30 +2,46 @@ import 'package:material_ui/material_ui.dart';
 
 import '../platform/window.dart';
 import 'fit_mode.dart';
+import 'reader_settings.dart';
+import 'spreads.dart';
 
-/// The reader overlay: title bar with fit-mode / fullscreen controls and a
-/// bottom page scrubber. Fades in and out; ignores input while hidden.
+/// The reader overlay: title bar with display controls and a bottom
+/// scrubber. Fades in and out; ignores input while hidden.
 class ReaderChrome extends StatelessWidget {
   const ReaderChrome({
     super.key,
     required this.visible,
     required this.title,
-    required this.page,
+    required this.pages,
     required this.pageCount,
-    required this.fit,
+    required this.unit,
+    required this.unitCount,
+    required this.settings,
     required this.onSeek,
-    required this.onFitChanged,
+    required this.onSettingsChanged,
     required this.onBack,
+    this.onInfo,
   });
 
   final bool visible;
   final String title;
-  final int page;
+
+  /// Pages in the current unit.
+  final List<int> pages;
   final int pageCount;
-  final FitMode fit;
+  final int unit;
+  final int unitCount;
+  final ReaderSettings settings;
   final ValueChanged<int> onSeek;
-  final ValueChanged<FitMode> onFitChanged;
+  final ValueChanged<ReaderSettings> onSettingsChanged;
   final VoidCallback onBack;
+  final VoidCallback? onInfo;
+
+  String get _pageLabel {
+    final first = pages.first + 1;
+    final range = pages.length == 1 ? '$first' : '$first–${pages.last + 1}';
+    return '$range / $pageCount';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,11 +74,16 @@ class ReaderChrome extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
+                      _LayoutMenu(
+                        settings: settings,
+                        onChanged: onSettingsChanged,
+                      ),
                       PopupMenuButton<FitMode>(
                         tooltip: 'Fit (M)',
-                        icon: Icon(fit.icon),
-                        initialValue: fit,
-                        onSelected: onFitChanged,
+                        icon: Icon(settings.fit.icon),
+                        initialValue: settings.fit,
+                        onSelected: (f) =>
+                            onSettingsChanged(settings.copyWith(fit: f)),
                         itemBuilder: (_) => [
                           for (final m in FitMode.values)
                             PopupMenuItem(
@@ -75,6 +96,12 @@ class ReaderChrome extends StatelessWidget {
                             ),
                         ],
                       ),
+                      if (onInfo != null)
+                        IconButton(
+                          tooltip: 'Book info (I)',
+                          icon: const Icon(Icons.info_outline),
+                          onPressed: onInfo,
+                        ),
                       if (isDesktop)
                         const IconButton(
                           tooltip: 'Fullscreen (F)',
@@ -96,17 +123,16 @@ class ReaderChrome extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: pageCount > 1
+                        child: unitCount > 1
                             ? Slider(
-                                value: page.toDouble(),
-                                max: (pageCount - 1).toDouble(),
-                                divisions: pageCount - 1,
-                                label: '${page + 1}',
+                                value: unit.toDouble(),
+                                max: (unitCount - 1).toDouble(),
+                                divisions: unitCount - 1,
                                 onChanged: (v) => onSeek(v.round()),
                               )
                             : const SizedBox(height: 48),
                       ),
-                      Text('${page + 1} / $pageCount'),
+                      Text(_pageLabel),
                     ],
                   ),
                 ),
@@ -115,6 +141,45 @@ class ReaderChrome extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Page layout choice plus the "cover on its own" toggle.
+class _LayoutMenu extends StatelessWidget {
+  const _LayoutMenu({required this.settings, required this.onChanged});
+
+  final ReaderSettings settings;
+  final ValueChanged<ReaderSettings> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<Object>(
+      tooltip: 'Page layout (D)',
+      icon: Icon(settings.layout.icon),
+      onSelected: (v) => onChanged(
+        v is LayoutMode
+            ? settings.copyWith(layout: v)
+            : settings.copyWith(coverAlone: !settings.coverAlone),
+      ),
+      itemBuilder: (_) => [
+        for (final m in LayoutMode.values)
+          PopupMenuItem<Object>(
+            value: m,
+            child: ListTile(
+              leading: Icon(m.icon),
+              title: Text(m.label),
+              trailing: m == settings.layout ? const Icon(Icons.check) : null,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        const PopupMenuDivider(),
+        CheckedPopupMenuItem<Object>(
+          value: #cover,
+          checked: settings.coverAlone,
+          child: const Text('Show cover on its own (O)'),
+        ),
+      ],
     );
   }
 }

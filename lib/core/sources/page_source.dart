@@ -18,6 +18,14 @@ sealed class PageSource {
 
   int get pageCount;
 
+  /// Each page's size (pixels for images, points for rendered pages), or
+  /// null where it can't be determined. Reads headers only where possible;
+  /// may take a while for archives that must be extracted first.
+  Future<List<ui.Size?>> probePageSizes();
+
+  /// The raw ComicInfo.xml inside this comic, if there is one.
+  Future<String?> readComicInfo();
+
   /// Releases any open handles. The source must not be used afterwards.
   Future<void> close();
 }

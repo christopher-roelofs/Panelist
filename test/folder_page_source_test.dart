@@ -1,10 +1,14 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:panelist/core/sources/folder_page_source.dart';
 import 'package:panelist/core/sources/open_source.dart';
 import 'package:panelist/core/sources/page_source.dart';
 import 'package:path/path.dart' as p;
+
+import 'support.dart';
 
 void main() {
   late Directory dir;
@@ -50,5 +54,17 @@ void main() {
       openSource(p.join(dir.path, 'nope')),
       throwsA(isA<UnsupportedSourceException>()),
     );
+  });
+
+  test('probes sizes and reads ComicInfo.xml from the root', () async {
+    touch('1.png', pngHeader(10, 20));
+    touch('2.png', pngHeader(40, 20));
+    touch('comicinfo.XML', utf8.encode(comicInfoXml));
+    final src = await FolderPageSource.open(dir.path);
+    expect(await src.probePageSizes(), [
+      const Size(10, 20),
+      const Size(40, 20),
+    ]);
+    expect(await src.readComicInfo(), comicInfoXml);
   });
 }

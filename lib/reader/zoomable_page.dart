@@ -9,7 +9,8 @@ import 'package:material_ui/material_ui.dart';
 import '../core/sources/page_source.dart';
 import 'fit_mode.dart';
 
-/// One page in the reader: lays the image out for a [FitMode], and supports
+/// One reading unit (a page or a two-page spread): lays the pages out for a
+/// [FitMode] at a common height, and supports
 /// pinch / Ctrl+wheel / double-tap zoom and panning.
 ///
 /// The page is laid out on a "content" canvas at least as large as the
@@ -20,7 +21,7 @@ class ZoomablePage extends StatefulWidget {
   const ZoomablePage({
     super.key,
     required this.source,
-    required this.index,
+    required this.pages,
     required this.fit,
     required this.viewport,
     required this.isCurrent,
@@ -29,7 +30,10 @@ class ZoomablePage extends StatefulWidget {
   });
 
   final PageSource source;
-  final int index;
+
+  /// The page indices shown together (one page, or a two-page spread in
+  /// reading order).
+  final List<int> pages;
   final FitMode fit;
 
   /// Logical size of the reader viewport.
@@ -62,9 +66,9 @@ class ZoomablePageState extends State<ZoomablePage>
   );
   Matrix4Tween? _tween;
 
-  ImageStream? _stream;
-  late final _listener = ImageStreamListener(_onImage, onError: _onImageError);
-  Size? _imageSize;
+  final _streams = <ImageStream>[];
+  final _listeners = <ImageStreamListener>[];
+  List<Size?> _sizes = const [];
   Object? _error;
   int _zoomLevel = 1;
   bool _locked = false;
@@ -96,7 +100,7 @@ class ZoomablePageState extends State<ZoomablePage>
         old.fit != widget.fit ||
         old.viewport != widget.viewport ||
         old.source.id != widget.source.id ||
-        old.index != widget.index;
+        !listEquals(old.pages, widget.pages);
     if (layoutChanged) {
       _reset();
       _resolve();
@@ -109,7 +113,7 @@ class ZoomablePageState extends State<ZoomablePage>
 
   @override
   void dispose() {
-    _stream?.removeListener(_listener);
+    _unlisten();
     _anim.dispose();
     _tc.dispose();
     super.dispose();
@@ -120,34 +124,64 @@ class ZoomablePageState extends State<ZoomablePage>
 
   double get _dpr => MediaQuery.devicePixelRatioOf(context);
 
-  ImageProvider _provider({int zoom = 1}) => pageProvider(
+  /// The provider for the [slot]-th page of this unit.
+  ImageProvider _provider(int slot, {int zoom = 1}) => unitPageProvider(
     widget.source,
-    widget.index,
+    widget.pages[slot],
+    widget.pages.length,
     widget.fit,
     widget.viewport,
     _dpr,
     zoom: zoom,
   );
 
+  bool get _ready => _sizes.isNotEmpty && _sizes.every((s) => s != null);
+
   void _resolve() {
-    final stream = _provider().resolve(createLocalImageConfiguration(context));
-    if (stream.key == _stream?.key) return;
-    _stream?.removeListener(_listener);
-    _stream = stream..addListener(_listener);
+    final config = createLocalImageConfiguration(context);
+    final streams = [
+      for (var i = 0; i < widget.pages.length; i++)
+        _provider(i).resolve(config),
+    ];
+    if (_sameStreams(streams)) return;
+    _unlisten();
+    _sizes = List.filled(streams.length, null);
+    _error = null;
+    for (var i = 0; i < streams.length; i++) {
+      final listener = ImageStreamListener(
+        (info, _) => _onImage(i, info),
+        onError: _onImageError,
+      );
+      _streams.add(streams[i]..addListener(listener));
+      _listeners.add(listener);
+    }
   }
 
-  void _onImage(ImageInfo info, bool _) {
+  bool _sameStreams(List<ImageStream> streams) {
+    if (streams.length != _streams.length) return false;
+    for (var i = 0; i < streams.length; i++) {
+      if (streams[i].key != _streams[i].key) return false;
+    }
+    return true;
+  }
+
+  void _unlisten() {
+    for (var i = 0; i < _streams.length; i++) {
+      _streams[i].removeListener(_listeners[i]);
+    }
+    _streams.clear();
+    _listeners.clear();
+  }
+
+  void _onImage(int slot, ImageInfo info) {
     final size = Size(
       info.image.width.toDouble(),
       info.image.height.toDouble(),
     );
     info.dispose();
-    if (!mounted) return;
-    setState(() {
-      _imageSize = size;
-      _error = null;
-    });
-    _reportLock(force: true);
+    if (!mounted || slot >= _sizes.length) return;
+    setState(() => _sizes = [..._sizes]..[slot] = size);
+    if (_ready) _reportLock(force: true);
   }
 
   void _onImageError(Object error, StackTrace? _) {
@@ -157,20 +191,31 @@ class ZoomablePageState extends State<ZoomablePage>
   // ---------------------------------------------------------------------------
   // Geometry
 
-  /// Logical size of the page image at scale 1.
-  Size get _base {
-    final img = _imageSize!;
+  /// Logical size of each page at scale 1. Pages in a spread share a common
+  /// height (except at original size, where each keeps its own).
+  List<Size> get _slots {
+    final sizes = [for (final s in _sizes) s!];
+    if (widget.fit == FitMode.original) {
+      return [for (final s in sizes) s / _dpr];
+    }
     final v = widget.viewport;
-    final ar = img.width / img.height;
-    return switch (widget.fit) {
-      FitMode.screen =>
-        v.width / v.height > ar
-            ? Size(v.height * ar, v.height)
-            : Size(v.width, v.width / ar),
-      FitMode.width => Size(v.width, v.width / ar),
-      FitMode.height => Size(v.height * ar, v.height),
-      FitMode.original => img / _dpr,
+    final ratios = [for (final s in sizes) s.width / s.height];
+    final total = ratios.fold(0.0, (a, b) => a + b);
+    final height = switch (widget.fit) {
+      FitMode.screen => v.width / v.height > total ? v.height : v.width / total,
+      FitMode.width => v.width / total,
+      _ => v.height,
     };
+    return [for (final r in ratios) Size(height * r, height)];
+  }
+
+  /// Logical size of the whole unit at scale 1.
+  Size get _base {
+    final slots = _slots;
+    return Size(
+      slots.fold(0.0, (w, s) => w + s.width),
+      slots.fold(0.0, (h, s) => math.max(h, s.height)),
+    );
   }
 
   /// The pannable canvas: the page, padded to at least the viewport size.
@@ -208,7 +253,7 @@ class ZoomablePageState extends State<ZoomablePage>
   void _onTransform() => _reportLock();
 
   void _reportLock({bool force = false}) {
-    if (_imageSize == null) return;
+    if (!_ready) return;
     final locked =
         _scale > 1.01 || _content.width > widget.viewport.width + 0.5;
     if (locked == _locked && !force) return;
@@ -233,7 +278,7 @@ class ZoomablePageState extends State<ZoomablePage>
   /// Scrolls vertically by [dy] logical pixels. Returns false if the page
   /// is already at that edge (so the reader should turn the page instead).
   bool scrollBy(double dy, {bool animate = false}) {
-    if (_imageSize == null) return false;
+    if (!_ready) return false;
     final m = _targetValue;
     final t = m.getTranslation();
     final target = _matrix(m.getMaxScaleOnAxis(), t.x, t.y - dy);
@@ -254,20 +299,20 @@ class ZoomablePageState extends State<ZoomablePage>
   }
 
   void resetZoom() {
-    if (_imageSize == null) return;
+    if (!_ready) return;
     _animateTo(Matrix4.identity());
   }
 
   /// Double-tap behaviour: zoom into [globalPosition], or back out.
   void toggleZoomAt(Offset globalPosition) {
-    if (_imageSize == null) return;
+    if (!_ready) return;
     final box = context.findRenderObject()! as RenderBox;
     final p = box.globalToLocal(globalPosition);
     _zoomAround(p, _scale > 1.01 ? 1 : _doubleTapScale);
   }
 
   void _zoomAround(Offset focal, double newScale) {
-    if (_imageSize == null) return;
+    if (!_ready) return;
     final s = _scale;
     final t = _tc.value.getTranslation();
     final ns = clampDouble(newScale, 1.0, _maxScale);
@@ -307,13 +352,14 @@ class ZoomablePageState extends State<ZoomablePage>
     if (_error != null) {
       return Center(
         child: Text(
-          "Couldn't load page ${widget.index + 1}\n$_error",
+          "Couldn't load page ${widget.pages.map((p) => p + 1).join('–')}"
+          '\n$_error',
           textAlign: TextAlign.center,
           style: const TextStyle(color: Colors.white70),
         ),
       );
     }
-    if (_imageSize == null) {
+    if (!_ready) {
       // Still a scroll target while loading.
       return Listener(
         onPointerSignal: _onPointerSignal,
@@ -332,15 +378,21 @@ class ZoomablePageState extends State<ZoomablePage>
         child: SizedBox.fromSize(
           size: _content,
           child: Center(
-            child: SizedBox.fromSize(
-              size: _base,
-              child: Image(
-                image: _provider(zoom: _zoomLevel),
-                fit: BoxFit.fill,
-                gaplessPlayback: true,
-                filterQuality: FilterQuality.medium,
-                errorBuilder: (context, error, _) => const SizedBox(),
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (i, slot) in _slots.indexed)
+                  SizedBox.fromSize(
+                    size: slot,
+                    child: Image(
+                      image: _provider(i, zoom: _zoomLevel),
+                      fit: BoxFit.fill,
+                      gaplessPlayback: true,
+                      filterQuality: FilterQuality.medium,
+                      errorBuilder: (context, error, _) => const SizedBox(),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

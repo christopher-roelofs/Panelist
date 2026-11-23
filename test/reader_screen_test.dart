@@ -6,21 +6,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:panelist/app/providers.dart';
 import 'package:panelist/core/sources/page_source.dart';
+import 'package:panelist/data/book_extensions.dart';
 import 'package:panelist/data/database.dart';
 import 'package:panelist/reader/fit_mode.dart';
 import 'package:panelist/reader/reader_screen.dart';
+import 'package:panelist/reader/reader_settings.dart';
+import 'package:panelist/reader/spreads.dart';
+
+const _portrait = Size(1000, 1500);
+const _wide = Size(2000, 1500);
 
 class _FakeSource implements EncodedPageSource {
+  _FakeSource(this.sizes);
+
+  final List<Size?> sizes;
   bool closed = false;
+
   @override
   String get id => 'fake';
   @override
   String get title => 'Fake Comic';
   @override
-  int get pageCount => 5;
+  int get pageCount => sizes.length;
   // Empty bytes: every page is undecodable, which must not crash the reader.
   @override
   Future<Uint8List> page(int index) async => Uint8List(0);
+  @override
+  Future<List<Size?>> probePageSizes() async => sizes;
+  @override
+  Future<String?> readComicInfo() async => null;
   @override
   Future<void> close() async => closed = true;
 }
@@ -29,22 +43,45 @@ void main() {
   late AppDatabase db;
 
   setUpAll(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = true);
-  setUp(() async {
-    db = AppDatabase(NativeDatabase.memory());
-    await db.recordOpened(id: 'fake', path: '/x', title: 'x', pageCount: 5);
-  });
+  setUp(() => db = AppDatabase(NativeDatabase.memory()));
   tearDown(() => db.close());
 
+  /// Opens the reader on a fake book whose page sizes are already cached
+  /// (so pairing is deterministic). The test viewport is 800x600, i.e.
+  /// landscape.
   Future<(_FakeSource, ProviderContainer)> pump(
     WidgetTester tester, {
+    List<Size?> sizes = const [
+      _portrait,
+      _portrait,
+      _portrait,
+      _portrait,
+      _portrait,
+    ],
     int initialPage = 0,
+    ReaderSettings defaults = const ReaderSettings(layout: LayoutMode.single),
   }) async {
-    final src = _FakeSource();
+    final src = _FakeSource(sizes);
+    final book = (await tester.runAsync(() async {
+      await db.recordOpened(
+        id: 'fake',
+        path: '/x',
+        title: 'x',
+        pageCount: sizes.length,
+      );
+      await db.savePageSizes('fake', encodePageSizes(sizes));
+      return db.book('fake');
+    }))!;
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db)],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          readerDefaultsProvider.overrideWith(
+            () => ReaderDefaultsNotifier(defaults),
+          ),
+        ],
         child: MaterialApp(
-          home: ReaderScreen(source: src, initialPage: initialPage),
+          home: ReaderScreen(source: src, book: book, initialPage: initialPage),
         ),
       ),
     );
@@ -59,6 +96,9 @@ void main() {
     await tester.sendKeyEvent(k);
     await tester.pumpAndSettle();
   }
+
+  Future<Book> stored(WidgetTester tester) async =>
+      (await tester.runAsync(() => db.book('fake')))!;
 
   testWidgets('keyboard navigation moves between pages', (tester) async {
     await pump(tester);
@@ -107,15 +147,73 @@ void main() {
     await pump(tester, initialPage: 3);
     expect(find.text('4 / 5'), findsOneWidget);
     await key(tester, LogicalKeyboardKey.arrowRight);
-    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-    expect((await tester.runAsync(() => db.book('fake')))!.currentPage, 4);
+    expect((await stored(tester)).currentPage, 4);
   });
 
-  testWidgets('M cycles the fit mode', (tester) async {
+  testWidgets('two-page layout: cover alone, then spreads', (tester) async {
+    await pump(
+      tester,
+      defaults: const ReaderSettings(layout: LayoutMode.double),
+    );
+    expect(find.text('1 / 5'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(find.text('2–3 / 5'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(find.text('4–5 / 5'), findsOneWidget);
+    // Progress is the first page of the spread.
+    expect((await stored(tester)).currentPage, 3);
+  });
+
+  testWidgets('wide pages are never paired', (tester) async {
+    await pump(
+      tester,
+      sizes: const [_portrait, _portrait, _wide, _portrait, _portrait],
+      defaults: const ReaderSettings(layout: LayoutMode.double),
+    );
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(find.text('2 / 5'), findsOneWidget); // can't pair with the wide 3
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(find.text('3 / 5'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(find.text('4–5 / 5'), findsOneWidget);
+  });
+
+  testWidgets('auto layout uses spreads in landscape', (tester) async {
+    await pump(tester, defaults: const ReaderSettings());
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(find.text('2–3 / 5'), findsOneWidget);
+  });
+
+  testWidgets('changing layout keeps the reading position', (tester) async {
+    await pump(tester, initialPage: 3); // single layout, page 4
+    await key(tester, LogicalKeyboardKey.keyD); // -> two pages
+    expect(find.text('4–5 / 5'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.keyD); // -> auto (landscape)
+    expect(find.text('4–5 / 5'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.keyD); // -> single
+    expect(find.text('4 / 5'), findsOneWidget);
+  });
+
+  testWidgets('cover toggle re-pairs pages', (tester) async {
+    await pump(
+      tester,
+      defaults: const ReaderSettings(layout: LayoutMode.double),
+    );
+    await key(tester, LogicalKeyboardKey.keyO);
+    expect(find.text('1–2 / 5'), findsOneWidget);
+  });
+
+  testWidgets('settings are saved per book and become the default', (
+    tester,
+  ) async {
     final (_, container) = await pump(tester);
-    expect(container.read(fitModeProvider), FitMode.screen);
-    await key(tester, LogicalKeyboardKey.keyM);
-    expect(container.read(fitModeProvider), FitMode.width);
+    await key(tester, LogicalKeyboardKey.keyM); // fit: screen -> width
+    await key(tester, LogicalKeyboardKey.keyD); // layout: single -> double
+    final book = await stored(tester);
+    expect(book.fitMode, 'width');
+    expect(book.layoutMode, 'double');
+    expect(container.read(readerDefaultsProvider).fit, FitMode.width);
+    expect(container.read(readerDefaultsProvider).layout, LayoutMode.double);
   });
 
   testWidgets('closes the source when disposed', (tester) async {

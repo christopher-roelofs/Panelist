@@ -13,7 +13,10 @@ flutter run -d linux -a "/path/to/Comic 01.cbz" # open a comic directly
 ```
 
 Opens CBZ, CBR (RAR 4/5), CB7, CBT and PDF files, plus folders of images.
-Formats are detected from file content, so mislabelled files still open. Drop a file on the window, use
+Formats are detected from file content, so mislabelled files still open.
+Two-page spreads pair portrait pages automatically (wide, pre-joined
+spreads stay on their own), and ComicInfo.xml series/number/credits are
+shown when present. Fit, layout and cover settings are remembered per book. Drop a file on the window, use
 **Open file / Open folder**, or pick up where you left off under
 *Continue reading*. Progress is saved on every page turn and follows the
 file even if it is renamed or moved.
@@ -39,6 +42,9 @@ installed by default on most distributions).
 | First / last page | Home / End | Page slider |
 | Zoom in / out / reset | + / − / 0 | Pinch, Ctrl+wheel, double-tap centre |
 | Cycle fit mode (screen, width, height, original) | M | Overlay menu |
+| Cycle page layout (single, two pages, auto) | D | Overlay menu |
+| Show cover on its own (re-pairs spreads) | O | Overlay menu |
+| Book info (ComicInfo.xml) | I | Overlay button |
 | Fullscreen | F, F11 | Overlay button |
 | Toggle overlay | — | Click/tap centre |
 | Close (or leave fullscreen) | Esc | Back button |

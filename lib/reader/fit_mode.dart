@@ -53,3 +53,22 @@ ImageProvider pageProvider(
     },
   };
 }
+
+/// [pageProvider] for a page shown as part of a unit of [unitLength] pages:
+/// each page of a two-page spread gets half the viewport width.
+ImageProvider unitPageProvider(
+  PageSource source,
+  int page,
+  int unitLength,
+  FitMode fit,
+  Size viewport,
+  double dpr, {
+  int zoom = 1,
+}) => pageProvider(
+  source,
+  page,
+  fit,
+  unitLength == 2 ? Size(viewport.width / 2, viewport.height) : viewport,
+  dpr,
+  zoom: zoom,
+);

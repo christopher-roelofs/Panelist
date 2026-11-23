@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +9,8 @@ import 'package:panelist/core/sources/archive_page_source.dart';
 import 'package:panelist/core/sources/open_source.dart';
 import 'package:panelist/core/sources/page_source.dart';
 import 'package:path/path.dart' as p;
+
+import 'support.dart';
 
 final _has7z = Process.runSync('which', ['7z']).exitCode == 0;
 
@@ -149,4 +153,20 @@ void main() {
     expect(await s.page(2), [10]);
     expect(await s.page(0), big);
   }, skip: _has7z ? false : '7z CLI not installed');
+
+  test('probes sizes after extraction and reads ComicInfo.xml', () async {
+    final src = await ArchivePageSource.open(
+      writeTar('meta.cbt', {
+        'ComicInfo.xml': utf8.encode(comicInfoXml),
+        '2.png': pngHeader(30, 40),
+        '1.png': pngHeader(10, 20),
+      }),
+    );
+    addTearDown(src.close);
+    expect(await src.probePageSizes(), [
+      const Size(10, 20),
+      const Size(30, 40),
+    ]);
+    expect(await src.readComicInfo(), comicInfoXml);
+  });
 }

@@ -20,15 +20,15 @@ Future<void> main(List<String> args) async {
   );
   unawaited(ArchivePageSource.cleanStaleCache());
   final db = AppDatabase();
-  final fit = FitModeNotifier.parse(
-    await db.setting(FitModeNotifier.settingKey),
-  );
+  final defaults = await ReaderDefaultsNotifier.load(db);
 
   runApp(
     ProviderScope(
       overrides: [
         databaseProvider.overrideWithValue(db),
-        fitModeProvider.overrideWith(() => FitModeNotifier(fit)),
+        readerDefaultsProvider.overrideWith(
+          () => ReaderDefaultsNotifier(defaults),
+        ),
       ],
       child: PanelistApp(initialPath: args.isEmpty ? null : args.first),
     ),

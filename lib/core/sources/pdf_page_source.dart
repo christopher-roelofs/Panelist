@@ -57,6 +57,14 @@ class PdfPageSource implements RenderedPageSource {
   }
 
   @override
+  Future<List<ui.Size?>> probePageSizes() async => [
+    for (var i = 0; i < pageCount; i++) pageSize(i),
+  ];
+
+  @override
+  Future<String?> readComicInfo() async => null;
+
+  @override
   Future<ui.Image> render(int index, int width, int height) async {
     if (_closed) throw StateError('Source is closed');
     final image = await _doc.pages[index].render(

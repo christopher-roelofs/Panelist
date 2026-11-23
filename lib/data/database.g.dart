@@ -78,6 +78,123 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     type: DriftSqlType.blob,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _seriesMeta = const VerificationMeta('series');
+  @override
+  late final GeneratedColumn<String> series = GeneratedColumn<String>(
+    'series',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<String> number = GeneratedColumn<String>(
+    'number',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _yearMeta = const VerificationMeta('year');
+  @override
+  late final GeneratedColumn<int> year = GeneratedColumn<int>(
+    'year',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _writerMeta = const VerificationMeta('writer');
+  @override
+  late final GeneratedColumn<String> writer = GeneratedColumn<String>(
+    'writer',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _artistMeta = const VerificationMeta('artist');
+  @override
+  late final GeneratedColumn<String> artist = GeneratedColumn<String>(
+    'artist',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _summaryMeta = const VerificationMeta(
+    'summary',
+  );
+  @override
+  late final GeneratedColumn<String> summary = GeneratedColumn<String>(
+    'summary',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _rightToLeftMeta = const VerificationMeta(
+    'rightToLeft',
+  );
+  @override
+  late final GeneratedColumn<bool> rightToLeft = GeneratedColumn<bool>(
+    'right_to_left',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("right_to_left" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _pageSizesMeta = const VerificationMeta(
+    'pageSizes',
+  );
+  @override
+  late final GeneratedColumn<String> pageSizes = GeneratedColumn<String>(
+    'page_sizes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fitModeMeta = const VerificationMeta(
+    'fitMode',
+  );
+  @override
+  late final GeneratedColumn<String> fitMode = GeneratedColumn<String>(
+    'fit_mode',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _layoutModeMeta = const VerificationMeta(
+    'layoutMode',
+  );
+  @override
+  late final GeneratedColumn<String> layoutMode = GeneratedColumn<String>(
+    'layout_mode',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverAloneMeta = const VerificationMeta(
+    'coverAlone',
+  );
+  @override
+  late final GeneratedColumn<bool> coverAlone = GeneratedColumn<bool>(
+    'cover_alone',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("cover_alone" IN (0, 1))',
+    ),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -87,6 +204,17 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     currentPage,
     lastOpened,
     cover,
+    series,
+    number,
+    year,
+    writer,
+    artist,
+    summary,
+    rightToLeft,
+    pageSizes,
+    fitMode,
+    layoutMode,
+    coverAlone,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -152,6 +280,75 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         cover.isAcceptableOrUnknown(data['cover']!, _coverMeta),
       );
     }
+    if (data.containsKey('series')) {
+      context.handle(
+        _seriesMeta,
+        series.isAcceptableOrUnknown(data['series']!, _seriesMeta),
+      );
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    }
+    if (data.containsKey('year')) {
+      context.handle(
+        _yearMeta,
+        year.isAcceptableOrUnknown(data['year']!, _yearMeta),
+      );
+    }
+    if (data.containsKey('writer')) {
+      context.handle(
+        _writerMeta,
+        writer.isAcceptableOrUnknown(data['writer']!, _writerMeta),
+      );
+    }
+    if (data.containsKey('artist')) {
+      context.handle(
+        _artistMeta,
+        artist.isAcceptableOrUnknown(data['artist']!, _artistMeta),
+      );
+    }
+    if (data.containsKey('summary')) {
+      context.handle(
+        _summaryMeta,
+        summary.isAcceptableOrUnknown(data['summary']!, _summaryMeta),
+      );
+    }
+    if (data.containsKey('right_to_left')) {
+      context.handle(
+        _rightToLeftMeta,
+        rightToLeft.isAcceptableOrUnknown(
+          data['right_to_left']!,
+          _rightToLeftMeta,
+        ),
+      );
+    }
+    if (data.containsKey('page_sizes')) {
+      context.handle(
+        _pageSizesMeta,
+        pageSizes.isAcceptableOrUnknown(data['page_sizes']!, _pageSizesMeta),
+      );
+    }
+    if (data.containsKey('fit_mode')) {
+      context.handle(
+        _fitModeMeta,
+        fitMode.isAcceptableOrUnknown(data['fit_mode']!, _fitModeMeta),
+      );
+    }
+    if (data.containsKey('layout_mode')) {
+      context.handle(
+        _layoutModeMeta,
+        layoutMode.isAcceptableOrUnknown(data['layout_mode']!, _layoutModeMeta),
+      );
+    }
+    if (data.containsKey('cover_alone')) {
+      context.handle(
+        _coverAloneMeta,
+        coverAlone.isAcceptableOrUnknown(data['cover_alone']!, _coverAloneMeta),
+      );
+    }
     return context;
   }
 
@@ -189,6 +386,50 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.blob,
         data['${effectivePrefix}cover'],
       ),
+      series: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}series'],
+      ),
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}number'],
+      ),
+      year: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}year'],
+      ),
+      writer: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}writer'],
+      ),
+      artist: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}artist'],
+      ),
+      summary: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}summary'],
+      ),
+      rightToLeft: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}right_to_left'],
+      ),
+      pageSizes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}page_sizes'],
+      ),
+      fitMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}fit_mode'],
+      ),
+      layoutMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}layout_mode'],
+      ),
+      coverAlone: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}cover_alone'],
+      ),
     );
   }
 
@@ -206,6 +447,17 @@ class Book extends DataClass implements Insertable<Book> {
   final int currentPage;
   final DateTime lastOpened;
   final Uint8List? cover;
+  final String? series;
+  final String? number;
+  final int? year;
+  final String? writer;
+  final String? artist;
+  final String? summary;
+  final bool? rightToLeft;
+  final String? pageSizes;
+  final String? fitMode;
+  final String? layoutMode;
+  final bool? coverAlone;
   const Book({
     required this.id,
     required this.path,
@@ -214,6 +466,17 @@ class Book extends DataClass implements Insertable<Book> {
     required this.currentPage,
     required this.lastOpened,
     this.cover,
+    this.series,
+    this.number,
+    this.year,
+    this.writer,
+    this.artist,
+    this.summary,
+    this.rightToLeft,
+    this.pageSizes,
+    this.fitMode,
+    this.layoutMode,
+    this.coverAlone,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -226,6 +489,39 @@ class Book extends DataClass implements Insertable<Book> {
     map['last_opened'] = Variable<DateTime>(lastOpened);
     if (!nullToAbsent || cover != null) {
       map['cover'] = Variable<Uint8List>(cover);
+    }
+    if (!nullToAbsent || series != null) {
+      map['series'] = Variable<String>(series);
+    }
+    if (!nullToAbsent || number != null) {
+      map['number'] = Variable<String>(number);
+    }
+    if (!nullToAbsent || year != null) {
+      map['year'] = Variable<int>(year);
+    }
+    if (!nullToAbsent || writer != null) {
+      map['writer'] = Variable<String>(writer);
+    }
+    if (!nullToAbsent || artist != null) {
+      map['artist'] = Variable<String>(artist);
+    }
+    if (!nullToAbsent || summary != null) {
+      map['summary'] = Variable<String>(summary);
+    }
+    if (!nullToAbsent || rightToLeft != null) {
+      map['right_to_left'] = Variable<bool>(rightToLeft);
+    }
+    if (!nullToAbsent || pageSizes != null) {
+      map['page_sizes'] = Variable<String>(pageSizes);
+    }
+    if (!nullToAbsent || fitMode != null) {
+      map['fit_mode'] = Variable<String>(fitMode);
+    }
+    if (!nullToAbsent || layoutMode != null) {
+      map['layout_mode'] = Variable<String>(layoutMode);
+    }
+    if (!nullToAbsent || coverAlone != null) {
+      map['cover_alone'] = Variable<bool>(coverAlone);
     }
     return map;
   }
@@ -241,6 +537,37 @@ class Book extends DataClass implements Insertable<Book> {
       cover: cover == null && nullToAbsent
           ? const Value.absent()
           : Value(cover),
+      series: series == null && nullToAbsent
+          ? const Value.absent()
+          : Value(series),
+      number: number == null && nullToAbsent
+          ? const Value.absent()
+          : Value(number),
+      year: year == null && nullToAbsent ? const Value.absent() : Value(year),
+      writer: writer == null && nullToAbsent
+          ? const Value.absent()
+          : Value(writer),
+      artist: artist == null && nullToAbsent
+          ? const Value.absent()
+          : Value(artist),
+      summary: summary == null && nullToAbsent
+          ? const Value.absent()
+          : Value(summary),
+      rightToLeft: rightToLeft == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rightToLeft),
+      pageSizes: pageSizes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pageSizes),
+      fitMode: fitMode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fitMode),
+      layoutMode: layoutMode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(layoutMode),
+      coverAlone: coverAlone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coverAlone),
     );
   }
 
@@ -257,6 +584,17 @@ class Book extends DataClass implements Insertable<Book> {
       currentPage: serializer.fromJson<int>(json['currentPage']),
       lastOpened: serializer.fromJson<DateTime>(json['lastOpened']),
       cover: serializer.fromJson<Uint8List?>(json['cover']),
+      series: serializer.fromJson<String?>(json['series']),
+      number: serializer.fromJson<String?>(json['number']),
+      year: serializer.fromJson<int?>(json['year']),
+      writer: serializer.fromJson<String?>(json['writer']),
+      artist: serializer.fromJson<String?>(json['artist']),
+      summary: serializer.fromJson<String?>(json['summary']),
+      rightToLeft: serializer.fromJson<bool?>(json['rightToLeft']),
+      pageSizes: serializer.fromJson<String?>(json['pageSizes']),
+      fitMode: serializer.fromJson<String?>(json['fitMode']),
+      layoutMode: serializer.fromJson<String?>(json['layoutMode']),
+      coverAlone: serializer.fromJson<bool?>(json['coverAlone']),
     );
   }
   @override
@@ -270,6 +608,17 @@ class Book extends DataClass implements Insertable<Book> {
       'currentPage': serializer.toJson<int>(currentPage),
       'lastOpened': serializer.toJson<DateTime>(lastOpened),
       'cover': serializer.toJson<Uint8List?>(cover),
+      'series': serializer.toJson<String?>(series),
+      'number': serializer.toJson<String?>(number),
+      'year': serializer.toJson<int?>(year),
+      'writer': serializer.toJson<String?>(writer),
+      'artist': serializer.toJson<String?>(artist),
+      'summary': serializer.toJson<String?>(summary),
+      'rightToLeft': serializer.toJson<bool?>(rightToLeft),
+      'pageSizes': serializer.toJson<String?>(pageSizes),
+      'fitMode': serializer.toJson<String?>(fitMode),
+      'layoutMode': serializer.toJson<String?>(layoutMode),
+      'coverAlone': serializer.toJson<bool?>(coverAlone),
     };
   }
 
@@ -281,6 +630,17 @@ class Book extends DataClass implements Insertable<Book> {
     int? currentPage,
     DateTime? lastOpened,
     Value<Uint8List?> cover = const Value.absent(),
+    Value<String?> series = const Value.absent(),
+    Value<String?> number = const Value.absent(),
+    Value<int?> year = const Value.absent(),
+    Value<String?> writer = const Value.absent(),
+    Value<String?> artist = const Value.absent(),
+    Value<String?> summary = const Value.absent(),
+    Value<bool?> rightToLeft = const Value.absent(),
+    Value<String?> pageSizes = const Value.absent(),
+    Value<String?> fitMode = const Value.absent(),
+    Value<String?> layoutMode = const Value.absent(),
+    Value<bool?> coverAlone = const Value.absent(),
   }) => Book(
     id: id ?? this.id,
     path: path ?? this.path,
@@ -289,6 +649,17 @@ class Book extends DataClass implements Insertable<Book> {
     currentPage: currentPage ?? this.currentPage,
     lastOpened: lastOpened ?? this.lastOpened,
     cover: cover.present ? cover.value : this.cover,
+    series: series.present ? series.value : this.series,
+    number: number.present ? number.value : this.number,
+    year: year.present ? year.value : this.year,
+    writer: writer.present ? writer.value : this.writer,
+    artist: artist.present ? artist.value : this.artist,
+    summary: summary.present ? summary.value : this.summary,
+    rightToLeft: rightToLeft.present ? rightToLeft.value : this.rightToLeft,
+    pageSizes: pageSizes.present ? pageSizes.value : this.pageSizes,
+    fitMode: fitMode.present ? fitMode.value : this.fitMode,
+    layoutMode: layoutMode.present ? layoutMode.value : this.layoutMode,
+    coverAlone: coverAlone.present ? coverAlone.value : this.coverAlone,
   );
   Book copyWithCompanion(BooksCompanion data) {
     return Book(
@@ -303,6 +674,23 @@ class Book extends DataClass implements Insertable<Book> {
           ? data.lastOpened.value
           : this.lastOpened,
       cover: data.cover.present ? data.cover.value : this.cover,
+      series: data.series.present ? data.series.value : this.series,
+      number: data.number.present ? data.number.value : this.number,
+      year: data.year.present ? data.year.value : this.year,
+      writer: data.writer.present ? data.writer.value : this.writer,
+      artist: data.artist.present ? data.artist.value : this.artist,
+      summary: data.summary.present ? data.summary.value : this.summary,
+      rightToLeft: data.rightToLeft.present
+          ? data.rightToLeft.value
+          : this.rightToLeft,
+      pageSizes: data.pageSizes.present ? data.pageSizes.value : this.pageSizes,
+      fitMode: data.fitMode.present ? data.fitMode.value : this.fitMode,
+      layoutMode: data.layoutMode.present
+          ? data.layoutMode.value
+          : this.layoutMode,
+      coverAlone: data.coverAlone.present
+          ? data.coverAlone.value
+          : this.coverAlone,
     );
   }
 
@@ -315,7 +703,18 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('pageCount: $pageCount, ')
           ..write('currentPage: $currentPage, ')
           ..write('lastOpened: $lastOpened, ')
-          ..write('cover: $cover')
+          ..write('cover: $cover, ')
+          ..write('series: $series, ')
+          ..write('number: $number, ')
+          ..write('year: $year, ')
+          ..write('writer: $writer, ')
+          ..write('artist: $artist, ')
+          ..write('summary: $summary, ')
+          ..write('rightToLeft: $rightToLeft, ')
+          ..write('pageSizes: $pageSizes, ')
+          ..write('fitMode: $fitMode, ')
+          ..write('layoutMode: $layoutMode, ')
+          ..write('coverAlone: $coverAlone')
           ..write(')'))
         .toString();
   }
@@ -329,6 +728,17 @@ class Book extends DataClass implements Insertable<Book> {
     currentPage,
     lastOpened,
     $driftBlobEquality.hash(cover),
+    series,
+    number,
+    year,
+    writer,
+    artist,
+    summary,
+    rightToLeft,
+    pageSizes,
+    fitMode,
+    layoutMode,
+    coverAlone,
   );
   @override
   bool operator ==(Object other) =>
@@ -340,7 +750,18 @@ class Book extends DataClass implements Insertable<Book> {
           other.pageCount == this.pageCount &&
           other.currentPage == this.currentPage &&
           other.lastOpened == this.lastOpened &&
-          $driftBlobEquality.equals(other.cover, this.cover));
+          $driftBlobEquality.equals(other.cover, this.cover) &&
+          other.series == this.series &&
+          other.number == this.number &&
+          other.year == this.year &&
+          other.writer == this.writer &&
+          other.artist == this.artist &&
+          other.summary == this.summary &&
+          other.rightToLeft == this.rightToLeft &&
+          other.pageSizes == this.pageSizes &&
+          other.fitMode == this.fitMode &&
+          other.layoutMode == this.layoutMode &&
+          other.coverAlone == this.coverAlone);
 }
 
 class BooksCompanion extends UpdateCompanion<Book> {
@@ -351,6 +772,17 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<int> currentPage;
   final Value<DateTime> lastOpened;
   final Value<Uint8List?> cover;
+  final Value<String?> series;
+  final Value<String?> number;
+  final Value<int?> year;
+  final Value<String?> writer;
+  final Value<String?> artist;
+  final Value<String?> summary;
+  final Value<bool?> rightToLeft;
+  final Value<String?> pageSizes;
+  final Value<String?> fitMode;
+  final Value<String?> layoutMode;
+  final Value<bool?> coverAlone;
   final Value<int> rowid;
   const BooksCompanion({
     this.id = const Value.absent(),
@@ -360,6 +792,17 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.currentPage = const Value.absent(),
     this.lastOpened = const Value.absent(),
     this.cover = const Value.absent(),
+    this.series = const Value.absent(),
+    this.number = const Value.absent(),
+    this.year = const Value.absent(),
+    this.writer = const Value.absent(),
+    this.artist = const Value.absent(),
+    this.summary = const Value.absent(),
+    this.rightToLeft = const Value.absent(),
+    this.pageSizes = const Value.absent(),
+    this.fitMode = const Value.absent(),
+    this.layoutMode = const Value.absent(),
+    this.coverAlone = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   BooksCompanion.insert({
@@ -370,6 +813,17 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.currentPage = const Value.absent(),
     required DateTime lastOpened,
     this.cover = const Value.absent(),
+    this.series = const Value.absent(),
+    this.number = const Value.absent(),
+    this.year = const Value.absent(),
+    this.writer = const Value.absent(),
+    this.artist = const Value.absent(),
+    this.summary = const Value.absent(),
+    this.rightToLeft = const Value.absent(),
+    this.pageSizes = const Value.absent(),
+    this.fitMode = const Value.absent(),
+    this.layoutMode = const Value.absent(),
+    this.coverAlone = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        path = Value(path),
@@ -384,6 +838,17 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<int>? currentPage,
     Expression<DateTime>? lastOpened,
     Expression<Uint8List>? cover,
+    Expression<String>? series,
+    Expression<String>? number,
+    Expression<int>? year,
+    Expression<String>? writer,
+    Expression<String>? artist,
+    Expression<String>? summary,
+    Expression<bool>? rightToLeft,
+    Expression<String>? pageSizes,
+    Expression<String>? fitMode,
+    Expression<String>? layoutMode,
+    Expression<bool>? coverAlone,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -394,6 +859,17 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (currentPage != null) 'current_page': currentPage,
       if (lastOpened != null) 'last_opened': lastOpened,
       if (cover != null) 'cover': cover,
+      if (series != null) 'series': series,
+      if (number != null) 'number': number,
+      if (year != null) 'year': year,
+      if (writer != null) 'writer': writer,
+      if (artist != null) 'artist': artist,
+      if (summary != null) 'summary': summary,
+      if (rightToLeft != null) 'right_to_left': rightToLeft,
+      if (pageSizes != null) 'page_sizes': pageSizes,
+      if (fitMode != null) 'fit_mode': fitMode,
+      if (layoutMode != null) 'layout_mode': layoutMode,
+      if (coverAlone != null) 'cover_alone': coverAlone,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -406,6 +882,17 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<int>? currentPage,
     Value<DateTime>? lastOpened,
     Value<Uint8List?>? cover,
+    Value<String?>? series,
+    Value<String?>? number,
+    Value<int?>? year,
+    Value<String?>? writer,
+    Value<String?>? artist,
+    Value<String?>? summary,
+    Value<bool?>? rightToLeft,
+    Value<String?>? pageSizes,
+    Value<String?>? fitMode,
+    Value<String?>? layoutMode,
+    Value<bool?>? coverAlone,
     Value<int>? rowid,
   }) {
     return BooksCompanion(
@@ -416,6 +903,17 @@ class BooksCompanion extends UpdateCompanion<Book> {
       currentPage: currentPage ?? this.currentPage,
       lastOpened: lastOpened ?? this.lastOpened,
       cover: cover ?? this.cover,
+      series: series ?? this.series,
+      number: number ?? this.number,
+      year: year ?? this.year,
+      writer: writer ?? this.writer,
+      artist: artist ?? this.artist,
+      summary: summary ?? this.summary,
+      rightToLeft: rightToLeft ?? this.rightToLeft,
+      pageSizes: pageSizes ?? this.pageSizes,
+      fitMode: fitMode ?? this.fitMode,
+      layoutMode: layoutMode ?? this.layoutMode,
+      coverAlone: coverAlone ?? this.coverAlone,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -444,6 +942,39 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (cover.present) {
       map['cover'] = Variable<Uint8List>(cover.value);
     }
+    if (series.present) {
+      map['series'] = Variable<String>(series.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<String>(number.value);
+    }
+    if (year.present) {
+      map['year'] = Variable<int>(year.value);
+    }
+    if (writer.present) {
+      map['writer'] = Variable<String>(writer.value);
+    }
+    if (artist.present) {
+      map['artist'] = Variable<String>(artist.value);
+    }
+    if (summary.present) {
+      map['summary'] = Variable<String>(summary.value);
+    }
+    if (rightToLeft.present) {
+      map['right_to_left'] = Variable<bool>(rightToLeft.value);
+    }
+    if (pageSizes.present) {
+      map['page_sizes'] = Variable<String>(pageSizes.value);
+    }
+    if (fitMode.present) {
+      map['fit_mode'] = Variable<String>(fitMode.value);
+    }
+    if (layoutMode.present) {
+      map['layout_mode'] = Variable<String>(layoutMode.value);
+    }
+    if (coverAlone.present) {
+      map['cover_alone'] = Variable<bool>(coverAlone.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -460,6 +991,17 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('currentPage: $currentPage, ')
           ..write('lastOpened: $lastOpened, ')
           ..write('cover: $cover, ')
+          ..write('series: $series, ')
+          ..write('number: $number, ')
+          ..write('year: $year, ')
+          ..write('writer: $writer, ')
+          ..write('artist: $artist, ')
+          ..write('summary: $summary, ')
+          ..write('rightToLeft: $rightToLeft, ')
+          ..write('pageSizes: $pageSizes, ')
+          ..write('fitMode: $fitMode, ')
+          ..write('layoutMode: $layoutMode, ')
+          ..write('coverAlone: $coverAlone, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -691,6 +1233,17 @@ typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
   Value<int> currentPage,
   required DateTime lastOpened,
   Value<Uint8List?> cover,
+  Value<String?> series,
+  Value<String?> number,
+  Value<int?> year,
+  Value<String?> writer,
+  Value<String?> artist,
+  Value<String?> summary,
+  Value<bool?> rightToLeft,
+  Value<String?> pageSizes,
+  Value<String?> fitMode,
+  Value<String?> layoutMode,
+  Value<bool?> coverAlone,
   Value<int> rowid,
 });
 typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
@@ -701,6 +1254,17 @@ typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
   Value<int> currentPage,
   Value<DateTime> lastOpened,
   Value<Uint8List?> cover,
+  Value<String?> series,
+  Value<String?> number,
+  Value<int?> year,
+  Value<String?> writer,
+  Value<String?> artist,
+  Value<String?> summary,
+  Value<bool?> rightToLeft,
+  Value<String?> pageSizes,
+  Value<String?> fitMode,
+  Value<String?> layoutMode,
+  Value<bool?> coverAlone,
   Value<int> rowid,
 });
 
@@ -744,6 +1308,61 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
 
   ColumnFilters<Uint8List> get cover => $composableBuilder(
     column: $table.cover,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get year => $composableBuilder(
+    column: $table.year,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get writer => $composableBuilder(
+    column: $table.writer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get artist => $composableBuilder(
+    column: $table.artist,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get summary => $composableBuilder(
+    column: $table.summary,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get rightToLeft => $composableBuilder(
+    column: $table.rightToLeft,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pageSizes => $composableBuilder(
+    column: $table.pageSizes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fitMode => $composableBuilder(
+    column: $table.fitMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get layoutMode => $composableBuilder(
+    column: $table.layoutMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get coverAlone => $composableBuilder(
+    column: $table.coverAlone,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -791,6 +1410,61 @@ class $$BooksTableOrderingComposer
     column: $table.cover,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get year => $composableBuilder(
+    column: $table.year,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get writer => $composableBuilder(
+    column: $table.writer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get artist => $composableBuilder(
+    column: $table.artist,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get summary => $composableBuilder(
+    column: $table.summary,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get rightToLeft => $composableBuilder(
+    column: $table.rightToLeft,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pageSizes => $composableBuilder(
+    column: $table.pageSizes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fitMode => $composableBuilder(
+    column: $table.fitMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get layoutMode => $composableBuilder(
+    column: $table.layoutMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get coverAlone => $composableBuilder(
+    column: $table.coverAlone,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$BooksTableAnnotationComposer
@@ -826,6 +1500,45 @@ class $$BooksTableAnnotationComposer
 
   GeneratedColumn<Uint8List> get cover =>
       $composableBuilder(column: $table.cover, builder: (column) => column);
+
+  GeneratedColumn<String> get series =>
+      $composableBuilder(column: $table.series, builder: (column) => column);
+
+  GeneratedColumn<String> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<int> get year =>
+      $composableBuilder(column: $table.year, builder: (column) => column);
+
+  GeneratedColumn<String> get writer =>
+      $composableBuilder(column: $table.writer, builder: (column) => column);
+
+  GeneratedColumn<String> get artist =>
+      $composableBuilder(column: $table.artist, builder: (column) => column);
+
+  GeneratedColumn<String> get summary =>
+      $composableBuilder(column: $table.summary, builder: (column) => column);
+
+  GeneratedColumn<bool> get rightToLeft => $composableBuilder(
+    column: $table.rightToLeft,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get pageSizes =>
+      $composableBuilder(column: $table.pageSizes, builder: (column) => column);
+
+  GeneratedColumn<String> get fitMode =>
+      $composableBuilder(column: $table.fitMode, builder: (column) => column);
+
+  GeneratedColumn<String> get layoutMode => $composableBuilder(
+    column: $table.layoutMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get coverAlone => $composableBuilder(
+    column: $table.coverAlone,
+    builder: (column) => column,
+  );
 }
 
 class $$BooksTableTableManager
@@ -863,6 +1576,17 @@ class $$BooksTableTableManager
                 Value<int> currentPage = const Value.absent(),
                 Value<DateTime> lastOpened = const Value.absent(),
                 Value<Uint8List?> cover = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<String?> number = const Value.absent(),
+                Value<int?> year = const Value.absent(),
+                Value<String?> writer = const Value.absent(),
+                Value<String?> artist = const Value.absent(),
+                Value<String?> summary = const Value.absent(),
+                Value<bool?> rightToLeft = const Value.absent(),
+                Value<String?> pageSizes = const Value.absent(),
+                Value<String?> fitMode = const Value.absent(),
+                Value<String?> layoutMode = const Value.absent(),
+                Value<bool?> coverAlone = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BooksCompanion(
                 id: id,
@@ -872,6 +1596,17 @@ class $$BooksTableTableManager
                 currentPage: currentPage,
                 lastOpened: lastOpened,
                 cover: cover,
+                series: series,
+                number: number,
+                year: year,
+                writer: writer,
+                artist: artist,
+                summary: summary,
+                rightToLeft: rightToLeft,
+                pageSizes: pageSizes,
+                fitMode: fitMode,
+                layoutMode: layoutMode,
+                coverAlone: coverAlone,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -883,6 +1618,17 @@ class $$BooksTableTableManager
                 Value<int> currentPage = const Value.absent(),
                 required DateTime lastOpened,
                 Value<Uint8List?> cover = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<String?> number = const Value.absent(),
+                Value<int?> year = const Value.absent(),
+                Value<String?> writer = const Value.absent(),
+                Value<String?> artist = const Value.absent(),
+                Value<String?> summary = const Value.absent(),
+                Value<bool?> rightToLeft = const Value.absent(),
+                Value<String?> pageSizes = const Value.absent(),
+                Value<String?> fitMode = const Value.absent(),
+                Value<String?> layoutMode = const Value.absent(),
+                Value<bool?> coverAlone = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => BooksCompanion.insert(
                 id: id,
@@ -892,6 +1638,17 @@ class $$BooksTableTableManager
                 currentPage: currentPage,
                 lastOpened: lastOpened,
                 cover: cover,
+                series: series,
+                number: number,
+                year: year,
+                writer: writer,
+                artist: artist,
+                summary: summary,
+                rightToLeft: rightToLeft,
+                pageSizes: pageSizes,
+                fitMode: fitMode,
+                layoutMode: layoutMode,
+                coverAlone: coverAlone,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -42,7 +42,7 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
 | M0 ✅ | Scaffold, lints, CI, `PageSource`, folder-of-images source, CLI arg / file picker | Linux app opens a folder of images and pages through it |
 | M1 ✅ | Great CBZ reader: single page, fit modes, zoom, keyboard/mouse/taps, preloading, saved progress, recent files | 200-page CBZ is smooth on Linux |
 | M2 ✅ | Formats: CBR/CB7/CBT via libarchive FFI, PDF via pdfrx | All common formats open |
-| M3 | Double-page spreads (auto wide-page detection, cover offset), per-book settings, ComicInfo.xml | Spreads read correctly |
+| M3 ✅ | Double-page spreads (auto wide-page detection, cover offset), per-book settings, ComicInfo.xml | Spreads read correctly |
 | M4 | Android: SAF file access, "Open with" intents, touch tuning, memory tuning on phones | Usable on Android phone + tablet |
 | M5 | Library: watched folders, thumbnails, continue reading, series/issue sorting | Home screen with Continue Reading |
 | Later | RTL manga, webtoon scroll, panel zoom, OPDS/Komga, Windows/macOS/iOS, AVIF/JXL | |

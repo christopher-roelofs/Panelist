@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:isolate';
 import 'dart:typed_data';
+import 'dart:ui' show Size;
 
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
+import '../imaging/image_header.dart';
+import '../metadata/comic_info.dart';
 import '../util/natural_sort.dart';
 import 'fingerprint.dart';
 import 'page_source.dart';
@@ -32,7 +36,7 @@ class CbzPageSource implements EncodedPageSource {
   final SendPort _commands;
   final ReceivePort _replies;
 
-  final _pending = <int, Completer<Uint8List>>{};
+  final _pending = <int, Completer<Object?>>{};
   var _nextId = 0;
   var _closed = false;
 
@@ -55,11 +59,9 @@ class CbzPageSource implements EncodedPageSource {
           ready.complete((port, fp, names));
         case ('error', final String error):
           ready.completeError(UnsupportedSourceException(error));
-        case (final int id, final TransferableTypedData data):
-          source?._pending
-              .remove(id)
-              ?.complete(data.materialize().asUint8List());
-        case (final int id, final String error):
+        case (final int id, 'ok', final Object? result):
+          source?._pending.remove(id)?.complete(result);
+        case (final int id, 'err', final String error):
           source?._pending.remove(id)?.completeError(Exception(error));
       }
     });
@@ -89,15 +91,40 @@ class CbzPageSource implements EncodedPageSource {
   /// Entry names in reading order (exposed for tests and diagnostics).
   List<String> get pageNames => List.unmodifiable(_pageNames);
 
-  @override
-  Future<Uint8List> page(int index) {
+  Future<Object?> _request(String command, Object? arg) {
     if (_closed) return Future.error(StateError('Source is closed'));
-    RangeError.checkValidIndex(index, _pageNames);
     final id = _nextId++;
-    final c = _pending[id] = Completer<Uint8List>();
-    _commands.send((id, index));
+    final c = _pending[id] = Completer<Object?>();
+    _commands.send((id, command, arg));
     return c.future;
   }
+
+  @override
+  Future<Uint8List> page(int index) async {
+    RangeError.checkValidIndex(index, _pageNames);
+    final data = await _request('page', index) as TransferableTypedData;
+    return data.materialize().asUint8List();
+  }
+
+  @override
+  Future<List<Size?>> probePageSizes() async {
+    // Small batches, so page requests from the reader interleave with
+    // probing instead of queueing behind the whole archive.
+    const batch = 8;
+    final sizes = <Size?>[];
+    for (var start = 0; start < pageCount; start += batch) {
+      final end = (start + batch).clamp(0, pageCount);
+      final result = await _request('sizes', (start, end)) as List<Object?>;
+      for (final r in result) {
+        sizes.add(r is (double, double) ? Size(r.$1, r.$2) : null);
+      }
+    }
+    return sizes;
+  }
+
+  @override
+  Future<String?> readComicInfo() async =>
+      await _request('comicInfo', null) as String?;
 
   @override
   Future<void> close() async {
@@ -117,6 +144,7 @@ void _workerMain((SendPort, String) init) {
   final (reply, path) = init;
   final InputFileStream input;
   final List<ArchiveFile> pages;
+  final ArchiveFile? comicInfo;
   final String fingerprint;
   try {
     input = InputFileStream(path);
@@ -125,6 +153,13 @@ void _workerMain((SendPort, String) init) {
       for (final f in archive.files)
         if (f.isFile && isPageEntry(f.name)) f,
     ]..sort((a, b) => naturalCompare(a.name, b.name));
+    // Prefer the shallowest ComicInfo.xml if there are several.
+    int depth(ArchiveFile f) => '/'.allMatches(f.name).length;
+    final infos = [
+      for (final f in archive.files)
+        if (f.isFile && ComicInfo.isComicInfoName(f.name)) f,
+    ]..sort((a, b) => depth(a) - depth(b));
+    comicInfo = infos.firstOrNull;
     fingerprint = fileFingerprint(path);
   } catch (e) {
     reply.send(('error', 'Not a readable CBZ/ZIP file: ${p.basename(path)}'));
@@ -135,6 +170,21 @@ void _workerMain((SendPort, String) init) {
     reply.send(('error', 'No images found in ${p.basename(path)}'));
     return;
   }
+
+  Uint8List read(ArchiveFile f) {
+    final out = OutputMemoryStream();
+    // Writes decompressed bytes without caching them on the ArchiveFile.
+    f.writeContent(out);
+    return out.getBytes();
+  }
+
+  List<(double, double)?> sizes(int start, int end) => [
+    for (var i = start; i < end; i++)
+      switch (readImageSize(read(pages[i]))) {
+        final s? => (s.width, s.height),
+        null => null,
+      },
+  ];
 
   final commands = ReceivePort();
   reply.send((
@@ -149,14 +199,22 @@ void _workerMain((SendPort, String) init) {
       commands.close();
       return;
     }
-    final (id, index) = msg as (int, int);
+    final (id, command, arg) = msg as (int, String, Object?);
     try {
-      final out = OutputMemoryStream();
-      // Writes decompressed bytes without caching them on the ArchiveFile.
-      pages[index].writeContent(out);
-      reply.send((id, TransferableTypedData.fromList([out.getBytes()])));
+      final result = switch ((command, arg)) {
+        ('page', final int i) => TransferableTypedData.fromList([
+          read(pages[i]),
+        ]),
+        ('sizes', (final int start, final int end)) => sizes(start, end),
+        ('comicInfo', _) =>
+          comicInfo == null
+              ? null
+              : utf8.decode(read(comicInfo), allowMalformed: true),
+        _ => throw ArgumentError('Bad command $command'),
+      };
+      reply.send((id, 'ok', result));
     } catch (e) {
-      reply.send((id, 'Failed to read page ${index + 1}: $e'));
+      reply.send((id, 'err', '$e'));
     }
   });
 }

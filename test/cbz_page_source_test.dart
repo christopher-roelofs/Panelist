@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +10,8 @@ import 'package:panelist/core/sources/open_source.dart';
 import 'package:panelist/core/sources/page_source.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
+
+import 'support.dart';
 
 void main() {
   late Directory dir;
@@ -116,5 +120,34 @@ void main() {
         ),
       );
     });
+  });
+
+  test('probes page sizes and reads ComicInfo.xml', () async {
+    final src = await CbzPageSource.open(
+      writeZip('meta.cbz', {
+        for (var i = 1; i <= 10; i++) '$i.png': pngHeader(i * 10, 20),
+        'Sub/ComicInfo.xml':
+            '<ComicInfo><Series>Deep</Series></ComicInfo>'.codeUnits,
+        'ComicInfo.xml': utf8.encode(comicInfoXml),
+      }),
+    );
+    addTearDown(src.close);
+    final sizes = await src.probePageSizes();
+    expect(sizes, hasLength(10));
+    expect(sizes.first, const Size(10, 20));
+    expect(sizes.last, const Size(100, 20));
+    // The shallowest ComicInfo wins, and UTF-8 survives.
+    expect(await src.readComicInfo(), comicInfoXml);
+  });
+
+  test('no ComicInfo.xml gives null', () async {
+    final src = await CbzPageSource.open(
+      writeZip('n.cbz', {
+        '1.jpg': [1],
+      }),
+    );
+    addTearDown(src.close);
+    expect(await src.readComicInfo(), isNull);
+    expect(await src.probePageSizes(), [null]);
   });
 }
