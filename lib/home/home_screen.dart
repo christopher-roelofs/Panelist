@@ -169,7 +169,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'CBZ files or folders of images — or drop one here.',
+            'CBZ, CBR, CB7, CBT, PDF or a folder of images. Or drop one here.',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 24),

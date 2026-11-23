@@ -1,15 +1,24 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import 'app/providers.dart';
+import 'core/sources/archive_page_source.dart';
 import 'data/database.dart';
 import 'home/home_screen.dart';
 
 /// `panelist [path]` opens [path] directly in the reader.
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  ArchivePageSource.cacheRoot = Directory(
+    p.join((await getApplicationCacheDirectory()).path, 'extracted'),
+  );
+  unawaited(ArchivePageSource.cleanStaleCache());
   final db = AppDatabase();
   final fit = FitModeNotifier.parse(
     await db.setting(FitModeNotifier.settingKey),

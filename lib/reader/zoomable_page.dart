@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -123,7 +124,8 @@ class ZoomablePageState extends State<ZoomablePage>
     widget.source,
     widget.index,
     widget.fit,
-    widget.viewport * _dpr,
+    widget.viewport,
+    _dpr,
     zoom: zoom,
   );
 
@@ -315,7 +317,7 @@ class ZoomablePageState extends State<ZoomablePage>
       // Still a scroll target while loading.
       return Listener(
         onPointerSignal: _onPointerSignal,
-        child: const SizedBox.expand(),
+        child: const SizedBox.expand(child: _DelayedSpinner()),
       );
     }
     return InteractiveViewer(
@@ -345,4 +347,37 @@ class ZoomablePageState extends State<ZoomablePage>
       ),
     );
   }
+}
+
+/// A progress indicator that only appears if loading takes noticeably long,
+/// so fast page turns don't flash a spinner.
+class _DelayedSpinner extends StatefulWidget {
+  const _DelayedSpinner();
+
+  @override
+  State<_DelayedSpinner> createState() => _DelayedSpinnerState();
+}
+
+class _DelayedSpinnerState extends State<_DelayedSpinner> {
+  bool _visible = false;
+  late final Timer _timer = Timer(const Duration(milliseconds: 400), () {
+    if (mounted) setState(() => _visible = true);
+  });
+
+  @override
+  void initState() {
+    super.initState();
+    _timer; // start
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _visible
+      ? const Center(child: CircularProgressIndicator(color: Colors.white54))
+      : const SizedBox();
 }

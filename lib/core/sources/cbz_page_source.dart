@@ -14,7 +14,7 @@ import 'page_source.dart';
 /// The archive lives in a dedicated worker isolate that keeps the central
 /// directory parsed and the file handle open, so pages are random-access and
 /// decompression never runs on the UI isolate.
-class CbzPageSource implements PageSource {
+class CbzPageSource implements EncodedPageSource {
   CbzPageSource._(
     this.path,
     this.id,

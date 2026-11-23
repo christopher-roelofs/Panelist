@@ -7,11 +7,15 @@ import 'package:panelist/core/sources/cbz_page_source.dart';
 import 'package:panelist/core/sources/open_source.dart';
 import 'package:panelist/core/sources/page_source.dart';
 import 'package:path/path.dart' as p;
+import 'package:pdfrx/pdfrx.dart';
 
 void main() {
   late Directory dir;
 
-  setUp(() => dir = Directory.systemTemp.createTempSync('panelist_cbz'));
+  setUp(() {
+    dir = Directory.systemTemp.createTempSync('panelist_cbz');
+    Pdfrx.cacheDirectoryPath ??= Directory.systemTemp.path;
+  });
   tearDown(() => dir.deleteSync(recursive: true));
 
   String writeZip(String name, Map<String, List<int>> entries) {
@@ -98,22 +102,19 @@ void main() {
       expect(src, isA<CbzPageSource>());
     });
 
-    test('real RAR and garbage files give clear errors', () {
-      final rar = p.join(dir.path, 'real.cbr');
-      File(rar).writeAsBytesSync([...'Rar!'.codeUnits, 0x1A, 0x07, 0, 0]);
-      final junk = p.join(dir.path, 'junk.cbz');
-      File(junk).writeAsBytesSync([1, 2, 3, 4, 5, 6, 7, 8]);
+    test('PDF magic routes to the PDF reader', () async {
+      final fake = p.join(dir.path, 'fake.cbz');
+      File(fake).writeAsBytesSync('%PDF-1.4 not really'.codeUnits);
       expect(
-        openSource(rar),
+        openSource(fake),
         throwsA(
           isA<UnsupportedSourceException>().having(
             (e) => e.message,
             'message',
-            contains('RAR'),
+            contains('PDF'),
           ),
         ),
       );
-      expect(openSource(junk), throwsA(isA<UnsupportedSourceException>()));
     });
   });
 }

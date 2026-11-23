@@ -9,7 +9,7 @@ import 'page_source.dart';
 /// A comic stored as a directory of image files (searched recursively,
 /// so chapter sub-folders work). Pages are ordered by natural sort of their
 /// path relative to the root.
-class FolderPageSource implements PageSource {
+class FolderPageSource implements EncodedPageSource {
   FolderPageSource._(this._root, this._pages);
 
   final Directory _root;

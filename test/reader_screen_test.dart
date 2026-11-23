@@ -10,7 +10,7 @@ import 'package:panelist/data/database.dart';
 import 'package:panelist/reader/fit_mode.dart';
 import 'package:panelist/reader/reader_screen.dart';
 
-class _FakeSource implements PageSource {
+class _FakeSource implements EncodedPageSource {
   bool closed = false;
   @override
   String get id => 'fake';

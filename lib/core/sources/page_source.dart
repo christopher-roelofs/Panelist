@@ -1,14 +1,16 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:path/path.dart' as p;
 
-/// A readable comic: an ordered list of page images, regardless of the
-/// container format (folder, CBZ, CBR, PDF, ...).
+/// A readable comic: an ordered list of pages, regardless of the container
+/// format (folder, CBZ, CBR, PDF, ...).
 ///
-/// The reader only ever talks to this interface.
-abstract class PageSource {
-  /// Stable identifier for this book, used for image cache keys and,
-  /// later, for persisting reading progress.
+/// Implementations are either [EncodedPageSource] (pages are image files)
+/// or [RenderedPageSource] (pages are drawn on demand, e.g. PDF).
+sealed class PageSource {
+  /// Stable identifier for this book, used for image cache keys and for
+  /// persisting reading progress.
   String get id;
 
   /// Human-readable title (usually derived from the file/folder name).
@@ -16,11 +18,24 @@ abstract class PageSource {
 
   int get pageCount;
 
-  /// Encoded image bytes (JPEG/PNG/WebP/...) for page [index].
-  Future<Uint8List> page(int index);
-
   /// Releases any open handles. The source must not be used afterwards.
   Future<void> close();
+}
+
+/// Pages are stored as encoded images (JPEG/PNG/WebP/...).
+abstract class EncodedPageSource implements PageSource {
+  /// Encoded image bytes for page [index].
+  Future<Uint8List> page(int index);
+}
+
+/// Pages are rendered on demand at any requested resolution (vector
+/// formats such as PDF).
+abstract class RenderedPageSource implements PageSource {
+  /// The page's natural size in points (1/72 inch).
+  ui.Size pageSize(int index);
+
+  /// Renders page [index] at exactly [width] × [height] pixels.
+  Future<ui.Image> render(int index, int width, int height);
 }
 
 /// Thrown when a path can't be opened as a comic.

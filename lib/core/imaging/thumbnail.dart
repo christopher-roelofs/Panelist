@@ -13,8 +13,9 @@ Future<Uint8List?> renderThumbnail(
   int index = 0,
   int width = 240,
 }) async {
-  final stream = ResizeImage(
-    PageImage(source, index),
+  final stream = pageImage(
+    source,
+    index,
     width: width,
   ).resolve(ImageConfiguration.empty);
   final completer = Completer<ui.Image>();

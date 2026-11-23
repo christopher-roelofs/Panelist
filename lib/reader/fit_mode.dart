@@ -17,8 +17,8 @@ enum FitMode {
   FitMode get next => values[(index + 1) % values.length];
 }
 
-/// The image provider for page [index] decoded at the resolution [fit]
-/// needs on a [physicalViewport], times [zoom] (1, 2 or 4).
+/// The image provider for page [index] at the resolution [fit] needs on a
+/// [viewport] (logical pixels) at [dpr], times [zoom] (1, 2 or 4).
 ///
 /// Width/height modes constrain only one axis, so neighbours can be
 /// preloaded at the right resolution without knowing their aspect ratio.
@@ -28,20 +28,28 @@ ImageProvider pageProvider(
   PageSource source,
   int index,
   FitMode fit,
-  Size physicalViewport, {
+  Size viewport,
+  double dpr, {
   int zoom = 1,
 }) {
-  final base = PageImage(source, index);
-  int dim(double v) => bucketDimension(v * zoom);
+  int dim(double logical) => bucketDimension(logical * dpr * zoom);
   return switch (fit) {
-    FitMode.screen => ResizeImage(
-      base,
-      width: dim(physicalViewport.width),
-      height: dim(physicalViewport.height),
-      policy: ResizeImagePolicy.fit,
+    FitMode.screen => pageImage(
+      source,
+      index,
+      width: dim(viewport.width),
+      height: dim(viewport.height),
     ),
-    FitMode.width => ResizeImage(base, width: dim(physicalViewport.width)),
-    FitMode.height => ResizeImage(base, height: dim(physicalViewport.height)),
-    FitMode.original => base,
+    FitMode.width => pageImage(source, index, width: dim(viewport.width)),
+    FitMode.height => pageImage(source, index, height: dim(viewport.height)),
+    // Encoded pages: their own pixels. Rendered pages: 1pt = 1 logical px.
+    FitMode.original => switch (source) {
+      EncodedPageSource() => pageImage(source, index),
+      RenderedPageSource() => pageImage(
+        source,
+        index,
+        width: (source.pageSize(index).width * dpr * zoom).round(),
+      ),
+    },
   };
 }

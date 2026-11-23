@@ -112,14 +112,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void _preload(int around) {
     if (_viewport == Size.zero) return;
     final fit = ref.read(fitModeProvider);
-    final physical = _viewport * MediaQuery.devicePixelRatioOf(context);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
     for (var d = 1; d <= _preloadRadius; d++) {
       for (final i in [around + d, around - d]) {
         if (i < 0 || i >= _src.pageCount) continue;
         // Errors are ignored here; the page shows them when it's visited.
         unawaited(
           precacheImage(
-            pageProvider(_src, i, fit, physical),
+            pageProvider(_src, i, fit, _viewport, dpr),
             context,
             onError: (_, _) {},
           ),
