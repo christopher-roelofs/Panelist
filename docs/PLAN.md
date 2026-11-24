@@ -59,10 +59,14 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
   (`/proc/self/fd/N` + `pread`/`archive_read_open_fd`/pdfrx `openCustom`),
   because reopening that path fails with EACCES; see `fd_file.dart`.
   Non-seekable providers are copied to `cache/documents/` (not yet swept).
-- M4 remaining: real-finger flick/pinch check, phone testing and memory
-  tuning, release build, folder (SAF tree) support, cache sweep.
-- Touch: one-finger horizontal drags are recognised inside the zoom viewer
-  while unzoomed, so fast flicks turn pages instead of being claimed by the
-  InteractiveViewer's scale recognizer.
+- M4 remaining: phone testing and memory tuning, release build, folder
+  (SAF tree) support, cache sweep.
+- Touch: all touch gestures go through one recognizer inside the zoom
+  viewer (`_TouchRecognizer` in `zoomable_page.dart`); InteractiveViewer
+  only serves mouse/trackpad. One finger: page drag (unzoomed), pan with
+  inertia (zoomed), or pull-past-edge page turn when the swipe starts at a
+  zoomed page's edge. Two fingers down claim the gesture at once (pinch).
+  Page drags use `jumpTo`, not `ScrollPosition.drag`, which would make the
+  page view ignore a second finger.
 - Reader: paging backwards in fit-width should land at the bottom of the
-  previous page; drag past the edge while zoomed should turn the page.
+  previous page.

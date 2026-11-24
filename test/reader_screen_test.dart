@@ -137,10 +137,9 @@ void main() {
     expect(find.text('1 / 5'), findsOneWidget);
   });
 
-  testWidgets('a fast flick turns the page even over a zoomable page', (
-    tester,
-  ) async {
-    // Real, decodable pages, so the zoomable InteractiveViewer is built.
+  /// Opens the reader on real, decodable pages, so the zoomable page (and
+  /// its touch handling) is built.
+  Future<void> pumpDecodable(WidgetTester tester) async {
     final png = (await tester.runAsync(() async {
       final recorder = PictureRecorder();
       Canvas(recorder).drawRect(
@@ -157,16 +156,117 @@ void main() {
       await tester.pump();
     }
     expect(find.byType(InteractiveViewer), findsWidgets);
+  }
 
-    // A drag whose first move crosses every recognizer's slop at once (as
-    // fast flicks do), ending past halfway.
-    final g = await tester.startGesture(const Offset(600, 300));
-    for (final dx in const <double>[-120, -120, -120, -120, -120]) {
+  /// The current page's zoom.
+  double scale(WidgetTester tester) => tester
+      .widgetList<InteractiveViewer>(find.byType(InteractiveViewer))
+      .map((v) => v.transformationController!.value.getMaxScaleOnAxis())
+      .reduce((a, b) => a > b ? a : b);
+
+  Future<void> drag(
+    WidgetTester tester,
+    Offset from,
+    List<Offset> moves,
+  ) async {
+    final g = await tester.startGesture(from);
+    for (final m in moves) {
       await tester.pump(const Duration(milliseconds: 8));
-      await g.moveBy(Offset(dx, 0));
+      await g.moveBy(m);
     }
     await g.up();
     await tester.pumpAndSettle();
+  }
+
+  testWidgets('a fast flick turns the page even over a zoomable page', (
+    tester,
+  ) async {
+    await pumpDecodable(tester);
+    // A drag whose first move crosses every recognizer's slop at once (as
+    // fast flicks do), ending past halfway.
+    await drag(tester, const Offset(600, 300), [
+      for (var i = 0; i < 5; i++) const Offset(-120, 0),
+    ]);
+    expect(find.text('2 / 5'), findsOneWidget);
+  });
+
+  testWidgets('a pinch zooms even if the first finger drifts sideways', (
+    tester,
+  ) async {
+    await pumpDecodable(tester);
+    // First finger wanders far enough to start a page drag...
+    final a = await tester.startGesture(const Offset(400, 300));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 8));
+      await a.moveBy(const Offset(-20, 0));
+    }
+    // ...then the second lands and the fingers spread.
+    final b = await tester.startGesture(const Offset(460, 300));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 8));
+      await a.moveBy(const Offset(-20, 0));
+      await b.moveBy(const Offset(20, 0));
+    }
+    await a.up();
+    await b.up();
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 5'), findsOneWidget);
+    expect(scale(tester), greaterThan(1.5));
+  });
+
+  testWidgets('a pinch led by the newest finger zooms, not turns', (
+    tester,
+  ) async {
+    await pumpDecodable(tester);
+    // Both fingers down; the second one moves out sideways first (the page
+    // view's drag watches only the newest finger).
+    final a = await tester.startGesture(const Offset(380, 300));
+    await tester.pump(const Duration(milliseconds: 20));
+    final b = await tester.startGesture(const Offset(420, 300));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 8));
+      await b.moveBy(const Offset(12, 0));
+    }
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 8));
+      await a.moveBy(const Offset(-12, 0));
+      await b.moveBy(const Offset(12, 0));
+    }
+    await a.up();
+    await b.up();
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 5'), findsOneWidget);
+    expect(scale(tester), greaterThan(1.5));
+  });
+
+  testWidgets('zoomed: panning stays on the page, pulling past the edge '
+      'turns it', (tester) async {
+    await pumpDecodable(tester);
+    // Zoom in (about 3x) with a pinch.
+    final a = await tester.startGesture(const Offset(380, 300));
+    final b = await tester.startGesture(const Offset(420, 300));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 8));
+      await a.moveBy(const Offset(-5, 0));
+      await b.moveBy(const Offset(5, 0));
+    }
+    await a.up();
+    await b.up();
+    await tester.pumpAndSettle();
+    expect(scale(tester), inInclusiveRange(2.5, 3.5));
+
+    // A long pan that runs into the right edge and keeps pushing stays on
+    // this page.
+    await drag(tester, const Offset(700, 300), [
+      for (var i = 0; i < 40; i++) const Offset(-30, 0),
+    ]);
+    expect(find.text('1 / 5'), findsOneWidget);
+    expect(scale(tester), greaterThan(2.5));
+
+    // Starting at the edge, pulling further turns the page.
+    await drag(tester, const Offset(600, 300), [
+      for (var i = 0; i < 8; i++) const Offset(-30, 0),
+    ]);
     expect(find.text('2 / 5'), findsOneWidget);
   });
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show Drag;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -376,7 +377,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         onScrollPastEdge: (dir) {
                           if (u == _unit) _goTo(_unit + dir);
                         },
-                        onPageDrag: (d) => _controller!.position.drag(d, () {}),
+                        onPageDrag: (_) => _PageDrag(_controller!),
                       ),
                     ),
                   ),
@@ -398,6 +399,58 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             },
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A page turn driven by a finger on the zoomable page (see
+/// [ZoomablePage.onPageDrag]).
+///
+/// Moves the page view with `jumpTo` rather than `ScrollPosition.drag`: a
+/// scroll drag makes the page view ignore new pointers on its pages, which
+/// would keep a second finger (a pinch) from reaching the page.
+class _PageDrag implements Drag {
+  _PageDrag(this._controller);
+
+  final PageController _controller;
+  static const _flingVelocity = 300.0; // logical px/s
+
+  ScrollPosition get _pos => _controller.position;
+
+  @override
+  void update(DragUpdateDetails details) {
+    final p = _pos;
+    final target = p.pixels - (details.primaryDelta ?? details.delta.dx);
+    p.jumpTo(target.clamp(p.minScrollExtent, p.maxScrollExtent));
+  }
+
+  @override
+  void end(DragEndDetails details) {
+    final page = _controller.page ?? 0;
+    // Finger moving left (negative velocity) means the next page.
+    final v = -(details.primaryVelocity ?? 0);
+    final target = v.abs() > _flingVelocity
+        ? (v > 0 ? page.floor() + 1 : page.ceil() - 1)
+        : page.round();
+    _settle(target);
+  }
+
+  @override
+  void cancel() => _settle((_controller.page ?? 0).round());
+
+  void _settle(int target) {
+    final p = _pos;
+    final width = p.viewportDimension;
+    final last = width > 0 ? (p.maxScrollExtent / width).round() : 0;
+    final page = target.clamp(0, last);
+    final distance = (page * width - p.pixels).abs();
+    final ms = width > 0 ? (120 + 180 * distance / width).round() : 0;
+    unawaited(
+      _controller.animateToPage(
+        page,
+        duration: Duration(milliseconds: ms),
+        curve: Curves.easeOutCubic,
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -251,8 +252,12 @@ class ZoomablePageState extends State<ZoomablePage>
     return Matrix4.diagonal3Values(s, s, 1)..setTranslationRaw(x, y, 0);
   }
 
-  void _animateTo(Matrix4 target) {
+  void _animateTo(
+    Matrix4 target, {
+    Duration duration = const Duration(milliseconds: 220),
+  }) {
     _tween = Matrix4Tween(begin: _tc.value, end: target);
+    _anim.duration = duration;
     _anim.forward(from: 0);
   }
 
@@ -387,7 +392,7 @@ class ZoomablePageState extends State<ZoomablePage>
       onInteractionEnd: (_) => _updateZoomLevel(),
       child: Listener(
         onPointerSignal: _onPointerSignal,
-        child: _pageDragDetector(
+        child: _touchDetector(
           SizedBox.fromSize(
             size: _content,
             child: Center(
@@ -414,40 +419,232 @@ class ZoomablePageState extends State<ZoomablePage>
     );
   }
 
-  Widget _pageDragDetector(Widget child) {
-    if (widget.onPageDrag == null || _locked) return child;
-    return RawGestureDetector(
-      behavior: HitTestBehavior.opaque, // margins beside the page too
-      gestures: {
-        _PageDragRecognizer:
-            GestureRecognizerFactoryWithHandlers<_PageDragRecognizer>(
-              () => _PageDragRecognizer(debugOwner: this),
-              (r) => r
-                ..onStart = (d) {
-                  _pageDrag = widget.onPageDrag?.call(d);
-                }
-                ..onUpdate = (d) {
-                  _pageDrag?.update(d);
-                }
-                ..onEnd = (d) {
-                  _pageDrag?.end(d);
-                  _pageDrag = null;
-                }
-                ..onCancel = () {
-                  _pageDrag?.cancel();
-                  _pageDrag = null;
-                },
+  Widget _touchDetector(Widget child) => RawGestureDetector(
+    behavior: HitTestBehavior.opaque, // margins beside the page too
+    gestures: {
+      _TouchRecognizer: GestureRecognizerFactoryWithHandlers<_TouchRecognizer>(
+        () => _TouchRecognizer(debugOwner: this),
+        (r) => r
+          ..onStart = _onTouchStart
+          ..onUpdate = _onTouchUpdate
+          ..onEnd = _onTouchEnd,
+      ),
+    },
+    child: child,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Touch
+  //
+  // All touch gestures are handled here rather than by the InteractiveViewer
+  // (which still serves mouse and trackpad). The recognizer sits inside the
+  // viewer, so it wins the gesture arena against both the viewer and the
+  // page view. One gesture can pass through several segments: the scale
+  // recognizer ends a segment and starts a new one whenever a finger is
+  // added or lifted.
+  //
+  // * One finger, sideways, on a page that can't pan that way: a live page
+  //   drag (forwarded to [ZoomablePage.onPageDrag]). If the page is zoomed,
+  //   pulling past its edge and letting go turns the page instead. Only a
+  //   swipe that *starts* at the edge does this; a pan that runs into the
+  //   edge just stops there, so moving around a zoomed page never turns it
+  //   by accident.
+  // * One finger otherwise: pan, with inertia.
+  // * Two fingers, at any point: pinch zoom. A page drag in progress snaps
+  //   back, and the rest of the gesture never turns the page.
+
+  _TouchMode? _mode;
+  bool _pinched = false; // a pinch happened during this gesture
+  Offset _pending = Offset.zero; // movement before the mode was decided
+  double _overscroll = 0; // horizontal pull past the edge while zoomed
+  Matrix4 _segmentMatrix = Matrix4.identity();
+  Offset _segmentFocal = Offset.zero;
+  Offset _lastFocal = Offset.zero; // global
+
+  Offset _toLocal(Offset global) =>
+      (context.findRenderObject()! as RenderBox).globalToLocal(global);
+
+  void _onTouchStart(ScaleStartDetails d) {
+    _anim.stop();
+    _segmentMatrix = _tc.value.clone();
+    _segmentFocal = _toLocal(d.focalPoint);
+    _lastFocal = d.focalPoint;
+    _pending = Offset.zero;
+    if (d.pointerCount >= 2) {
+      _pinched = true;
+      _cancelPageDrag();
+      _mode = _TouchMode.pinch;
+    } else {
+      _mode = null;
+    }
+  }
+
+  void _onTouchUpdate(ScaleUpdateDetails d) {
+    if (d.pointerCount >= 2 || _mode == _TouchMode.pinch) {
+      _mode = _TouchMode.pinch;
+      _pinchTo(_toLocal(d.focalPoint), d.scale);
+      return;
+    }
+    // Not d.focalPointDelta: that is in the recognizer's local coordinates,
+    // which the zoom transform scales down.
+    final delta = d.focalPoint - _lastFocal;
+    _lastFocal = d.focalPoint;
+    if (_mode == null) {
+      _pending += delta;
+      if (_pending.distance < 2) return;
+      final sideways = _pending.dx.abs() > _pending.dy.abs();
+      final canPan = _canPanBy(_pending.dx);
+      if (sideways && !canPan && !_pinched && widget.onPageDrag != null) {
+        if (_scale > 1.01 || _content.width > widget.viewport.width + 0.5) {
+          _mode = _TouchMode.pull; // zoomed / wide: pull past the edge
+          _pullSign = _pending.dx.sign;
+          _overscroll = _pending.dx;
+        } else {
+          _mode = _TouchMode.page;
+          _pageDrag = widget.onPageDrag!(
+            DragStartDetails(globalPosition: d.focalPoint),
+          );
+          _pageDrag?.update(
+            DragUpdateDetails(
+              globalPosition: d.focalPoint,
+              delta: Offset(_pending.dx, 0),
+              primaryDelta: _pending.dx,
             ),
-      },
-      child: child,
+          );
+        }
+      } else {
+        _mode = _TouchMode.pan;
+        _panBy(_pending);
+      }
+      return;
+    }
+    switch (_mode!) {
+      case _TouchMode.page:
+        _pageDrag?.update(
+          DragUpdateDetails(
+            globalPosition: d.focalPoint,
+            delta: Offset(delta.dx, 0),
+            primaryDelta: delta.dx,
+          ),
+        );
+      case _TouchMode.pull:
+        _overscroll += delta.dx;
+        // Pulling back into the page resumes panning.
+        if (_canPanBy(delta.dx) && _overscroll.sign != _pullSign) {
+          _mode = _TouchMode.pan;
+          _panBy(delta);
+        }
+      case _TouchMode.pan:
+        _panBy(delta);
+      case _TouchMode.pinch:
+        break; // handled above
+    }
+  }
+
+  double _pullSign = 0;
+
+  void _onTouchEnd(ScaleEndDetails d) {
+    final v = d.velocity.pixelsPerSecond;
+    if (d.pointerCount > 0) {
+      // A finger was added or lifted; the gesture goes on.
+      if (_mode == _TouchMode.page) _cancelPageDrag();
+      _mode = null;
+      return;
+    }
+    switch (_mode) {
+      case _TouchMode.page:
+        _pageDrag?.end(
+          DragEndDetails(
+            velocity: Velocity(pixelsPerSecond: Offset(v.dx, 0)),
+            primaryVelocity: v.dx,
+          ),
+        );
+        _pageDrag = null;
+      case _TouchMode.pull:
+        final w = widget.viewport.width;
+        final flung = v.dx.abs() > 600 && v.dx.sign == _overscroll.sign;
+        if (_overscroll.abs() > w * 0.15 || (flung && _overscroll.abs() > 24)) {
+          // Finger moving left past the right edge: next page.
+          widget.onScrollPastEdge(_overscroll < 0 ? 1 : -1);
+        }
+      case _TouchMode.pan:
+        _fling(v);
+      case _TouchMode.pinch:
+        if (_scale < 1.05) _animateTo(Matrix4.identity());
+      case null:
+        break;
+    }
+    _mode = null;
+    _pinched = false;
+    _overscroll = 0;
+    _updateZoomLevel();
+  }
+
+  void _cancelPageDrag() {
+    _pageDrag?.cancel();
+    _pageDrag = null;
+  }
+
+  /// Whether the content can move horizontally with a finger moving [dx].
+  bool _canPanBy(double dx) {
+    final t = _tc.value.getTranslation();
+    final minX = math.min(0.0, widget.viewport.width - _content.width * _scale);
+    if (dx < 0) return t.x > minX + 0.5;
+    if (dx > 0) return t.x < -0.5;
+    return false;
+  }
+
+  void _panBy(Offset delta) {
+    final t = _tc.value.getTranslation();
+    final m = _matrix(_scale, t.x + delta.dx, t.y + delta.dy);
+    _tc.value = m;
+  }
+
+  void _pinchTo(Offset focal, double relativeScale) {
+    final s0 = _segmentMatrix.getMaxScaleOnAxis();
+    final t0 = _segmentMatrix.getTranslation();
+    final ns = clampDouble(s0 * relativeScale, 1.0, _maxScale);
+    // Keep the content point that was under the fingers under them.
+    final cx = (_segmentFocal.dx - t0.x) / s0;
+    final cy = (_segmentFocal.dy - t0.y) / s0;
+    _tc.value = _matrix(ns, focal.dx - cx * ns, focal.dy - cy * ns);
+  }
+
+  /// Pan inertia, decelerating like a scroll view.
+  void _fling(Offset velocity) {
+    final speed = velocity.distance;
+    if (speed < 50) return;
+    const drag = 0.0000135; // InteractiveViewer's friction
+    final sim = FrictionSimulation(drag, 0, speed);
+    final distance = sim.finalX;
+    final seconds = math.log(10 / speed) / math.log(drag);
+    final dir = velocity / speed;
+    final t = _tc.value.getTranslation();
+    _animateTo(
+      _matrix(_scale, t.x + dir.dx * distance, t.y + dir.dy * distance),
+      duration: Duration(
+        milliseconds: (seconds * 1000).clamp(150, 900).round(),
+      ),
     );
   }
 }
 
-/// A one-finger horizontal drag (touch/stylus only); gives up if a second
-/// finger lands before it has won, so pinches reach the zoom recognizer.
-class _PageDragRecognizer extends HorizontalDragGestureRecognizer {
-  _PageDragRecognizer({super.debugOwner})
+enum _TouchMode { page, pull, pan, pinch }
+
+/// The reader's touch gestures: a scale recognizer limited to touch and
+/// stylus (mouse and trackpad stay with the InteractiveViewer).
+///
+/// Two fingers down always means zoom: the gesture is claimed the moment a
+/// second finger lands, before either moves. Waiting for the pinch to
+/// spread past the scale slop loses too many pinches to the page view's
+/// drag, which only watches the newest finger and accepts as soon as it
+/// drifts sideways.
+///
+/// Once it owns a gesture, it also claims any further finger at once.
+/// Otherwise a finger landing after the first has moved starts its own
+/// arena, which the InteractiveViewer can win.
+class _TouchRecognizer extends ScaleGestureRecognizer {
+  _TouchRecognizer({super.debugOwner})
     : super(
         supportedDevices: const {
           PointerDeviceKind.touch,
@@ -457,25 +654,48 @@ class _PageDragRecognizer extends HorizontalDragGestureRecognizer {
         },
       );
 
-  int _pointers = 0;
-  bool _won = false;
+  bool _owned = false;
+  final _down = <int>{};
+
+  /// A scale recognizer starts panning at twice the touch slop, so the page
+  /// view's drag (at the touch slop) would win every slow one-finger drag.
+  /// Halving it here makes the thresholds equal, and ties go to us (we are
+  /// deeper in the tree, so we see each move first).
+  @override
+  DeviceGestureSettings? get gestureSettings {
+    final slop = super.gestureSettings?.touchSlop ?? kTouchSlop;
+    return DeviceGestureSettings(touchSlop: slop / 2);
+  }
 
   @override
   void addAllowedPointer(PointerDownEvent event) {
     super.addAllowedPointer(event);
-    if (++_pointers > 1 && !_won) resolve(GestureDisposition.rejected);
+    _down.add(event.pointer);
+    if (_owned) {
+      resolvePointer(event.pointer, GestureDisposition.accepted);
+    } else if (_down.length >= 2) {
+      resolve(GestureDisposition.accepted);
+    }
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _down.remove(event.pointer);
+    }
+    super.handleEvent(event);
   }
 
   @override
   void acceptGesture(int pointer) {
-    _won = true;
+    _owned = true;
     super.acceptGesture(pointer);
   }
 
   @override
   void didStopTrackingLastPointer(int pointer) {
-    _pointers = 0;
-    _won = false;
+    _owned = false;
+    _down.clear();
     super.didStopTrackingLastPointer(pointer);
   }
 }
