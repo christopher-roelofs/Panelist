@@ -10,6 +10,7 @@ import 'app/providers.dart';
 import 'core/sources/archive_page_source.dart';
 import 'data/database.dart';
 import 'home/home_screen.dart';
+import 'platform/android_documents.dart';
 
 /// `panelist [path]` opens [path] directly in the reader.
 Future<void> main(List<String> args) async {
@@ -72,12 +73,20 @@ class _LauncherState extends ConsumerState<_Launcher> {
   @override
   void initState() {
     super.initState();
-    final path = widget.initialPath;
-    if (path != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(openInReader(context, ref, path));
-      });
-    }
+    // Android "Open with": the launch intent, then any later ones.
+    AndroidDocuments.listen(_open);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final path =
+          widget.initialPath ?? await AndroidDocuments.takeInitialUri();
+      if (path != null) _open(path);
+    });
+  }
+
+  void _open(String path) {
+    if (!mounted) return;
+    // A new book replaces whatever is being read.
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    unawaited(openInReader(context, ref, path));
   }
 
   @override

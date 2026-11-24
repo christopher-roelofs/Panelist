@@ -6,6 +6,8 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
+import '../fd_file.dart';
+
 final class LaArchive extends Opaque {}
 
 final class LaEntry extends Opaque {}
@@ -43,6 +45,11 @@ class LibArchive {
             Int Function(Pointer<LaArchive>, Pointer<Utf8>, Size),
             int Function(Pointer<LaArchive>, Pointer<Utf8>, int)
           >('archive_read_open_filename'),
+      openFd = lib
+          .lookupFunction<
+            Int Function(Pointer<LaArchive>, Int, Size),
+            int Function(Pointer<LaArchive>, int, int)
+          >('archive_read_open_fd'),
       nextHeader = lib
           .lookupFunction<
             Int Function(Pointer<LaArchive>, Pointer<Pointer<LaEntry>>),
@@ -114,6 +121,7 @@ class LibArchive {
   final int Function(Pointer<LaArchive>) supportFilterAll;
   final int Function(Pointer<LaArchive>) supportFormatAll;
   final int Function(Pointer<LaArchive>, Pointer<Utf8>, int) openFilename;
+  final int Function(Pointer<LaArchive>, int, int) openFd;
   final int Function(Pointer<LaArchive>, Pointer<Pointer<LaEntry>>) nextHeader;
   final int Function(Pointer<LaArchive>, Pointer<Void>, int) readData;
   final int Function(Pointer<LaArchive>) dataSkip;
@@ -160,15 +168,25 @@ class ArchiveReader {
     if (a == nullptr) throw LibArchiveException('Out of memory');
     la.supportFilterAll(a);
     la.supportFormatAll(a);
-    final cPath = path.toNativeUtf8();
-    try {
-      if (la.openFilename(a, cPath, 1 << 16) != archiveOk) {
-        final msg = la.error(a);
-        la.readFree(a);
-        throw LibArchiveException(msg);
+    // A `/proc/self/fd/<n>` path can't be reopened on Android (see
+    // fd_file.dart), so read the descriptor itself, from the start.
+    final fd = fdOfPath(path);
+    final int status;
+    if (fd != null) {
+      FdReader(fd).rewind();
+      status = la.openFd(a, fd, 1 << 16);
+    } else {
+      final cPath = path.toNativeUtf8();
+      try {
+        status = la.openFilename(a, cPath, 1 << 16);
+      } finally {
+        malloc.free(cPath);
       }
-    } finally {
-      malloc.free(cPath);
+    }
+    if (status != archiveOk) {
+      final msg = la.error(a);
+      la.readFree(a);
+      throw LibArchiveException(msg);
     }
     return ArchiveReader._(la, a);
   }

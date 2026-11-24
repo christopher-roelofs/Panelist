@@ -27,6 +27,7 @@ class ZoomablePage extends StatefulWidget {
     required this.isCurrent,
     required this.onLockChanged,
     required this.onScrollPastEdge,
+    this.onPageDrag,
   });
 
   final PageSource source;
@@ -50,6 +51,16 @@ class ZoomablePage extends StatefulWidget {
   /// edge of the page.
   final ValueChanged<int> onScrollPastEdge;
 
+  /// Starts a page-turning drag (typically `PageController.position.drag`).
+  ///
+  /// The [InteractiveViewer]'s scale recognizer also claims one-finger
+  /// pans, and wins the gesture arena when a fast flick's first move
+  /// crosses both its slop and the page view's at once. So while the page
+  /// isn't zoomed, horizontal touch drags are recognised *inside* the
+  /// viewer, ahead of it, and forwarded here. A second finger hands the
+  /// gesture back to the viewer for pinch zoom.
+  final Drag Function(DragStartDetails details)? onPageDrag;
+
   @override
   State<ZoomablePage> createState() => ZoomablePageState();
 }
@@ -72,6 +83,7 @@ class ZoomablePageState extends State<ZoomablePage>
   Object? _error;
   int _zoomLevel = 1;
   bool _locked = false;
+  Drag? _pageDrag;
   DateTime _lastScrollMove = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
@@ -375,29 +387,96 @@ class ZoomablePageState extends State<ZoomablePage>
       onInteractionEnd: (_) => _updateZoomLevel(),
       child: Listener(
         onPointerSignal: _onPointerSignal,
-        child: SizedBox.fromSize(
-          size: _content,
-          child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final (i, slot) in _slots.indexed)
-                  SizedBox.fromSize(
-                    size: slot,
-                    child: Image(
-                      image: _provider(i, zoom: _zoomLevel),
-                      fit: BoxFit.fill,
-                      gaplessPlayback: true,
-                      filterQuality: FilterQuality.medium,
-                      errorBuilder: (context, error, _) => const SizedBox(),
+        child: _pageDragDetector(
+          SizedBox.fromSize(
+            size: _content,
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final (i, slot) in _slots.indexed)
+                    SizedBox.fromSize(
+                      size: slot,
+                      child: Image(
+                        image: _provider(i, zoom: _zoomLevel),
+                        fit: BoxFit.fill,
+                        gaplessPlayback: true,
+                        filterQuality: FilterQuality.medium,
+                        errorBuilder: (context, error, _) => const SizedBox(),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _pageDragDetector(Widget child) {
+    if (widget.onPageDrag == null || _locked) return child;
+    return RawGestureDetector(
+      behavior: HitTestBehavior.opaque, // margins beside the page too
+      gestures: {
+        _PageDragRecognizer:
+            GestureRecognizerFactoryWithHandlers<_PageDragRecognizer>(
+              () => _PageDragRecognizer(debugOwner: this),
+              (r) => r
+                ..onStart = (d) {
+                  _pageDrag = widget.onPageDrag?.call(d);
+                }
+                ..onUpdate = (d) {
+                  _pageDrag?.update(d);
+                }
+                ..onEnd = (d) {
+                  _pageDrag?.end(d);
+                  _pageDrag = null;
+                }
+                ..onCancel = () {
+                  _pageDrag?.cancel();
+                  _pageDrag = null;
+                },
+            ),
+      },
+      child: child,
+    );
+  }
+}
+
+/// A one-finger horizontal drag (touch/stylus only); gives up if a second
+/// finger lands before it has won, so pinches reach the zoom recognizer.
+class _PageDragRecognizer extends HorizontalDragGestureRecognizer {
+  _PageDragRecognizer({super.debugOwner})
+    : super(
+        supportedDevices: const {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.invertedStylus,
+          PointerDeviceKind.unknown,
+        },
+      );
+
+  int _pointers = 0;
+  bool _won = false;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    if (++_pointers > 1 && !_won) resolve(GestureDisposition.rejected);
+  }
+
+  @override
+  void acceptGesture(int pointer) {
+    _won = true;
+    super.acceptGesture(pointer);
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {
+    _pointers = 0;
+    _won = false;
+    super.didStopTrackingLastPointer(pointer);
   }
 }
 

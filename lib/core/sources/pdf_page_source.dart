@@ -4,15 +4,20 @@ import 'dart:ui' as ui;
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart';
 
+import 'fd_file.dart';
 import 'fingerprint.dart';
 import 'page_source.dart';
 
 /// A PDF comic, rendered with PDFium (via pdfrx) at whatever resolution the
 /// reader asks for, so zooming stays sharp.
 class PdfPageSource implements RenderedPageSource {
-  PdfPageSource._(this.path, this.id, this._doc);
+  PdfPageSource._(this.path, this.fileName, this._onClose, this.id, this._doc);
 
   final String path;
+
+  /// The comic's file name, for display.
+  final String fileName;
+  final Future<void> Function()? _onClose;
   @override
   final String id;
   final PdfDocument _doc;
@@ -20,32 +25,52 @@ class PdfPageSource implements RenderedPageSource {
 
   static bool _initialized = false;
 
-  static Future<PdfPageSource> open(String path) async {
+  /// [name] is the file name to show (defaults to [path]'s basename, which
+  /// is meaningless for e.g. `/proc/self/fd/N`); [onClose] runs after
+  /// [close] has released everything.
+  static Future<PdfPageSource> open(
+    String path, {
+    String? name,
+    Future<void> Function()? onClose,
+  }) async {
     if (!_initialized) {
       await pdfrxFlutterInitialize();
       _initialized = true;
     }
-    final name = p.basename(path);
+    final fileName = name ?? p.basename(path);
     final PdfDocument doc;
     try {
-      doc = await PdfDocument.openFile(path);
+      final fd = fdOfPath(path);
+      if (fd == null) {
+        doc = await PdfDocument.openFile(path);
+      } else {
+        // Can't be reopened by path on Android; read the descriptor.
+        final reader = FdReader(fd);
+        doc = await PdfDocument.openCustom(
+          read: (buffer, position, size) =>
+              reader.readInto(buffer, position, size),
+          fileSize: reader.length,
+          sourceName: 'fd:$fd:$fileName',
+          onDispose: reader.dispose,
+        );
+      }
     } on PdfPasswordException {
       throw UnsupportedSourceException(
-        'Password-protected PDFs are not supported yet: $name',
+        'Password-protected PDFs are not supported yet: $fileName',
       );
     } on Exception catch (e) {
-      throw UnsupportedSourceException('Not a readable PDF: $name ($e)');
+      throw UnsupportedSourceException('Not a readable PDF: $fileName ($e)');
     }
     if (doc.pages.isEmpty) {
       await doc.dispose();
-      throw UnsupportedSourceException('This PDF has no pages: $name');
+      throw UnsupportedSourceException('This PDF has no pages: $fileName');
     }
     final fp = await Isolate.run(() => fileFingerprint(path));
-    return PdfPageSource._(path, 'file:$fp', doc);
+    return PdfPageSource._(path, fileName, onClose, 'file:$fp', doc);
   }
 
   @override
-  String get title => p.basenameWithoutExtension(path);
+  String get title => p.basenameWithoutExtension(fileName);
 
   @override
   int get pageCount => _doc.pages.length;
@@ -87,5 +112,6 @@ class PdfPageSource implements RenderedPageSource {
     if (_closed) return;
     _closed = true;
     await _doc.dispose();
+    await _onClose?.call();
   }
 }

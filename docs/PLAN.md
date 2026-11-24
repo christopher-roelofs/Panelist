@@ -52,7 +52,17 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
   dir (`~/.cache/dev.panelist.panelist/extracted/book_<pid>_*`), removed on
   close and swept at startup if the owning process is gone. Solid RAR is
   decompressed twice (list pass + extract pass).
-- Android (M4) needs libarchive bundled (build hook compiling it, or a
-  prebuilt per ABI); today it is loaded from the system.
+- Android: libarchive (+ static liblzma) is built from pinned, hash-checked
+  release tarballs by CMake via Gradle (`android/app/src/main/cpp`).
+- Android documents are `content://` URIs (stored as the recent's path, with
+  persisted read permission). They are read through the descriptor
+  (`/proc/self/fd/N` + `pread`/`archive_read_open_fd`/pdfrx `openCustom`),
+  because reopening that path fails with EACCES; see `fd_file.dart`.
+  Non-seekable providers are copied to `cache/documents/` (not yet swept).
+- M4 remaining: real-finger flick/pinch check, phone testing and memory
+  tuning, release build, folder (SAF tree) support, cache sweep.
+- Touch: one-finger horizontal drags are recognised inside the zoom viewer
+  while unzoomed, so fast flicks turn pages instead of being claimed by the
+  InteractiveViewer's scale recognizer.
 - Reader: paging backwards in fit-width should land at the bottom of the
   previous page; drag past the edge while zoomed should turn the page.

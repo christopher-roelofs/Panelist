@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import '../imaging/image_header.dart';
 import '../metadata/comic_info.dart';
 import '../util/natural_sort.dart';
+import 'fd_file.dart';
 import 'fingerprint.dart';
 import 'page_source.dart';
 
@@ -21,6 +22,8 @@ import 'page_source.dart';
 class CbzPageSource implements EncodedPageSource {
   CbzPageSource._(
     this.path,
+    this.fileName,
+    this._onClose,
     this.id,
     this._pageNames,
     this._isolate,
@@ -29,6 +32,10 @@ class CbzPageSource implements EncodedPageSource {
   );
 
   final String path;
+
+  /// The comic's file name, for display.
+  final String fileName;
+  final Future<void> Function()? _onClose;
   @override
   final String id;
   final List<String> _pageNames;
@@ -40,12 +47,21 @@ class CbzPageSource implements EncodedPageSource {
   var _nextId = 0;
   var _closed = false;
 
-  static Future<CbzPageSource> open(String path) async {
+  /// [name] is the file name to show (defaults to [path]'s basename, which
+  /// is meaningless for e.g. `/proc/self/fd/N`); [onClose] runs after
+  /// [close] has released everything.
+  static Future<CbzPageSource> open(
+    String path, {
+    String? name,
+    Future<void> Function()? onClose,
+  }) async {
+    final fileName = name ?? p.basename(path);
     final replies = ReceivePort();
     final isolate = await Isolate.spawn(_workerMain, (
       replies.sendPort,
       path,
-    ), debugName: 'cbz:${p.basename(path)}');
+      fileName,
+    ), debugName: 'cbz:$fileName');
     final ready = Completer<(SendPort, String, List<String>)>();
     CbzPageSource? source;
     replies.listen((msg) {
@@ -69,6 +85,8 @@ class CbzPageSource implements EncodedPageSource {
       final (port, fp, names) = await ready.future;
       return source = CbzPageSource._(
         path,
+        fileName,
+        onClose,
         'file:$fp',
         names,
         isolate,
@@ -83,7 +101,7 @@ class CbzPageSource implements EncodedPageSource {
   }
 
   @override
-  String get title => p.basenameWithoutExtension(path);
+  String get title => p.basenameWithoutExtension(fileName);
 
   @override
   int get pageCount => _pageNames.length;
@@ -137,17 +155,21 @@ class CbzPageSource implements EncodedPageSource {
       c.completeError(StateError('Source was closed'));
     }
     _pending.clear();
+    await _onClose?.call();
   }
 }
 
-void _workerMain((SendPort, String) init) {
-  final (reply, path) = init;
+void _workerMain((SendPort, String, String) init) {
+  final (reply, path, name) = init;
   final InputFileStream input;
   final List<ArchiveFile> pages;
   final ArchiveFile? comicInfo;
   final String fingerprint;
   try {
-    input = InputFileStream(path);
+    final fd = fdOfPath(path);
+    input = fd == null
+        ? InputFileStream(path)
+        : InputFileStream.withFileHandle(FdFileHandle(fd));
     final archive = ZipDecoder().decodeStream(input);
     pages = [
       for (final f in archive.files)
@@ -162,12 +184,12 @@ void _workerMain((SendPort, String) init) {
     comicInfo = infos.firstOrNull;
     fingerprint = fileFingerprint(path);
   } catch (e) {
-    reply.send(('error', 'Not a readable CBZ/ZIP file: ${p.basename(path)}'));
+    reply.send(('error', 'Not a readable CBZ/ZIP file: $name'));
     return;
   }
   if (pages.isEmpty) {
     input.closeSync();
-    reply.send(('error', 'No images found in ${p.basename(path)}'));
+    reply.send(('error', 'No images found in $name'));
     return;
   }
 

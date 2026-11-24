@@ -28,6 +28,8 @@ import 'page_source.dart';
 class ArchivePageSource implements EncodedPageSource {
   ArchivePageSource._(
     this.path,
+    this.fileName,
+    this._onClose,
     this.id,
     this._names,
     this._dir,
@@ -41,6 +43,10 @@ class ArchivePageSource implements EncodedPageSource {
   static Directory? cacheRoot;
 
   final String path;
+
+  /// The comic's file name, for display.
+  final String fileName;
+  final Future<void> Function()? _onClose;
   @override
   final String id;
   final List<String> _names;
@@ -54,7 +60,15 @@ class ArchivePageSource implements EncodedPageSource {
   Object? _failure;
   bool _closed = false;
 
-  static Future<ArchivePageSource> open(String path) async {
+  /// [name] is the file name to show (defaults to [path]'s basename, which
+  /// is meaningless for e.g. `/proc/self/fd/N`); [onClose] runs after
+  /// [close] has released everything.
+  static Future<ArchivePageSource> open(
+    String path, {
+    String? name,
+    Future<void> Function()? onClose,
+  }) async {
+    final fileName = name ?? p.basename(path);
     final root = cacheRoot ?? Directory.systemTemp;
     await root.create(recursive: true);
     final dir = await root.createTemp('book_${pid}_');
@@ -87,7 +101,7 @@ class ArchivePageSource implements EncodedPageSource {
         case null: // onExit notice
           if (!ready.isCompleted) {
             ready.completeError(
-              UnsupportedSourceException('Could not read ${p.basename(path)}'),
+              UnsupportedSourceException('Could not read $fileName'),
             );
           }
           source?._onExited();
@@ -98,8 +112,8 @@ class ArchivePageSource implements EncodedPageSource {
 
     await Isolate.spawn(
       _workerMain,
-      (replies.sendPort, path, dir.path, stopFlag.address),
-      debugName: 'archive:${p.basename(path)}',
+      (replies.sendPort, path, fileName, dir.path, stopFlag.address),
+      debugName: 'archive:$fileName',
       onExit: replies.sendPort,
       onError: replies.sendPort,
       errorsAreFatal: true,
@@ -109,6 +123,8 @@ class ArchivePageSource implements EncodedPageSource {
       final (fp, names, info) = await ready.future;
       return source = ArchivePageSource._(
         path,
+        fileName,
+        onClose,
         'file:$fp',
         names,
         dir,
@@ -125,7 +141,7 @@ class ArchivePageSource implements EncodedPageSource {
   }
 
   @override
-  String get title => p.basenameWithoutExtension(path);
+  String get title => p.basenameWithoutExtension(fileName);
 
   @override
   int get pageCount => _names.length;
@@ -202,6 +218,7 @@ class ArchivePageSource implements EncodedPageSource {
     await _exited;
     calloc.free(_stopFlag);
     await _deleteQuietly(_dir);
+    await _onClose?.call();
   }
 
   /// Removes extraction directories left behind by a crash or kill.
@@ -241,11 +258,10 @@ class ArchivePageSource implements EncodedPageSource {
 // -----------------------------------------------------------------------------
 // Worker isolate
 
-void _workerMain((SendPort, String, String, int) init) {
-  final (reply, path, dir, flagAddress) = init;
+void _workerMain((SendPort, String, String, String, int) init) {
+  final (reply, path, name, dir, flagAddress) = init;
   final stop = Pointer<Int32>.fromAddress(flagAddress);
   bool stopped() => stop.value != 0;
-  final name = p.basename(path);
 
   final la = LibArchive.load();
   if (la == null) {

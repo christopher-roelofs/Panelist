@@ -27,6 +27,22 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        externalNativeBuild {
+            cmake {
+                // Only libarchive.so is packaged; liblzma is linked into it.
+                targets += "archive"
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
+            }
+        }
+    }
+
+    // libarchive for CBR/CB7/CBT (see src/main/cpp/CMakeLists.txt).
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {

@@ -376,6 +376,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         onScrollPastEdge: (dir) {
                           if (u == _unit) _goTo(_unit + dir);
                         },
+                        onPageDrag: (d) => _controller!.position.drag(d, () {}),
                       ),
                     ),
                   ),

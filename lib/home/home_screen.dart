@@ -14,6 +14,7 @@ import '../core/sources/open_source.dart';
 import '../core/sources/page_source.dart';
 import '../data/book_extensions.dart';
 import '../data/database.dart';
+import '../platform/android_documents.dart';
 import '../reader/reader_screen.dart';
 
 /// Opens [path] in the reader at its saved page, recording it in recents.
@@ -34,7 +35,7 @@ Future<void> openInReader(
   }
   var book = await db.recordOpened(
     id: source.id,
-    path: p.absolute(path),
+    path: AndroidDocuments.isContentUri(path) ? path : p.absolute(path),
     title: source.title,
     pageCount: source.pageCount,
   );
@@ -81,6 +82,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _dragging = false;
 
   Future<void> _pickFile() async {
+    if (AndroidDocuments.isSupported) {
+      final uri = await AndroidDocuments.pick();
+      if (uri != null && mounted) await openInReader(context, ref, uri);
+      return;
+    }
     final file = await openFile(
       acceptedTypeGroups: const [
         XTypeGroup(label: 'Comics', extensions: comicFileExtensions),
@@ -95,8 +101,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _openRecent(Book book) async {
-    final exists =
-        await FileSystemEntity.type(book.path) != FileSystemEntityType.notFound;
+    final exists = AndroidDocuments.isContentUri(book.path)
+        ? await AndroidDocuments.exists(book.path)
+        : await FileSystemEntity.type(book.path) !=
+              FileSystemEntityType.notFound;
     if (!mounted) return;
     if (!exists) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -104,13 +112,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           content: Text('"${book.displayTitle}" was moved or deleted.'),
           action: SnackBarAction(
             label: 'Remove',
-            onPressed: () => ref.read(databaseProvider).forget(book.id),
+            onPressed: () => _forget(book),
           ),
         ),
       );
       return;
     }
     await openInReader(context, ref, book.path);
+  }
+
+  Future<void> _forget(Book book) async {
+    await ref.read(databaseProvider).forget(book.id);
+    await AndroidDocuments.release(book.path);
   }
 
   @override
@@ -136,11 +149,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               icon: const Icon(Icons.file_open_outlined),
               onPressed: _pickFile,
             ),
-            IconButton(
-              tooltip: 'Open folder',
-              icon: const Icon(Icons.folder_open_outlined),
-              onPressed: _pickFolder,
-            ),
+            // Folders of images need SAF tree access on Android (later).
+            if (!AndroidDocuments.isSupported)
+              IconButton(
+                tooltip: 'Open folder',
+                icon: const Icon(Icons.folder_open_outlined),
+                onPressed: _pickFolder,
+              ),
             const SizedBox(width: 8),
           ],
         ),
@@ -152,11 +167,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 : null,
           ),
           child: recents.isEmpty
-              ? _EmptyState(onOpenFile: _pickFile, onOpenFolder: _pickFolder)
+              ? _EmptyState(
+                  onOpenFile: _pickFile,
+                  onOpenFolder: AndroidDocuments.isSupported
+                      ? null
+                      : _pickFolder,
+                )
               : _RecentGrid(
                   books: recents,
                   onOpen: _openRecent,
-                  onRemove: (b) => ref.read(databaseProvider).forget(b.id),
+                  onRemove: _forget,
                 ),
         ),
       ),
@@ -165,10 +185,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onOpenFile, required this.onOpenFolder});
+  const _EmptyState({required this.onOpenFile, this.onOpenFolder});
 
   final VoidCallback onOpenFile;
-  final VoidCallback onOpenFolder;
+  final VoidCallback? onOpenFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +205,10 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'CBZ, CBR, CB7, CBT, PDF or a folder of images. Or drop one here.',
+            onOpenFolder == null
+                ? 'CBZ, CBR, CB7, CBT or PDF.'
+                : 'CBZ, CBR, CB7, CBT, PDF or a folder of images. '
+                      'Or drop one here.',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 24),
@@ -199,11 +222,12 @@ class _EmptyState extends StatelessWidget {
                 icon: const Icon(Icons.file_open),
                 label: const Text('Open file'),
               ),
-              OutlinedButton.icon(
-                onPressed: onOpenFolder,
-                icon: const Icon(Icons.folder_open),
-                label: const Text('Open folder'),
-              ),
+              if (onOpenFolder != null)
+                OutlinedButton.icon(
+                  onPressed: onOpenFolder,
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('Open folder'),
+                ),
             ],
           ),
         ],

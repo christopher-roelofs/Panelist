@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageByteFormat, PictureRecorder;
+
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
@@ -17,9 +19,12 @@ const _portrait = Size(1000, 1500);
 const _wide = Size(2000, 1500);
 
 class _FakeSource implements EncodedPageSource {
-  _FakeSource(this.sizes);
+  _FakeSource(this.sizes, [this.bytes]);
 
   final List<Size?> sizes;
+
+  /// Encoded bytes for every page; null means undecodable pages.
+  final Uint8List? bytes;
   bool closed = false;
 
   @override
@@ -30,7 +35,7 @@ class _FakeSource implements EncodedPageSource {
   int get pageCount => sizes.length;
   // Empty bytes: every page is undecodable, which must not crash the reader.
   @override
-  Future<Uint8List> page(int index) async => Uint8List(0);
+  Future<Uint8List> page(int index) async => bytes ?? Uint8List(0);
   @override
   Future<List<Size?>> probePageSizes() async => sizes;
   @override
@@ -60,8 +65,9 @@ void main() {
     ],
     int initialPage = 0,
     ReaderSettings defaults = const ReaderSettings(layout: LayoutMode.single),
+    Uint8List? bytes,
   }) async {
-    final src = _FakeSource(sizes);
+    final src = _FakeSource(sizes, bytes);
     final book = (await tester.runAsync(() async {
       await db.recordOpened(
         id: 'fake',
@@ -129,6 +135,39 @@ void main() {
     await tester.tapAt(Offset(size.width * 0.1, size.height / 2));
     await tester.pumpAndSettle();
     expect(find.text('1 / 5'), findsOneWidget);
+  });
+
+  testWidgets('a fast flick turns the page even over a zoomable page', (
+    tester,
+  ) async {
+    // Real, decodable pages, so the zoomable InteractiveViewer is built.
+    final png = (await tester.runAsync(() async {
+      final recorder = PictureRecorder();
+      Canvas(recorder).drawRect(
+        const Rect.fromLTWH(0, 0, 100, 150),
+        Paint()..color = const Color(0xFF336699),
+      );
+      final image = await recorder.endRecording().toImage(100, 150);
+      final data = await image.toByteData(format: ImageByteFormat.png);
+      return data!.buffer.asUint8List();
+    }))!;
+    await pump(tester, sizes: List.filled(5, const Size(100, 150)), bytes: png);
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(() => Future<void>.delayed(Durations.short2));
+      await tester.pump();
+    }
+    expect(find.byType(InteractiveViewer), findsWidgets);
+
+    // A drag whose first move crosses every recognizer's slop at once (as
+    // fast flicks do), ending past halfway.
+    final g = await tester.startGesture(const Offset(600, 300));
+    for (final dx in const <double>[-120, -120, -120, -120, -120]) {
+      await tester.pump(const Duration(milliseconds: 8));
+      await g.moveBy(Offset(dx, 0));
+    }
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 5'), findsOneWidget);
   });
 
   testWidgets('centre tap toggles the overlay', (tester) async {
