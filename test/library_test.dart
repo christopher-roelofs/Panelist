@@ -83,7 +83,7 @@ void main() {
         pageCount: 36,
         finished: false,
       )),
-      LibraryComic(entry('Untagged Series (1999)', 'whatever 03.cbz'), null),
+      LibraryComic(entry('Untagged Series (1999)', 'Issue 03.cbz'), null),
     ];
 
     test('falls back to folder, then file name', () {
@@ -102,6 +102,33 @@ void main() {
       ));
       expect(untagged.number, '3');
       expect(untagged.yearWithSource, (1999, FieldSource.folder));
+    });
+
+    test('a folder that isn’t the series doesn’t name it', () {
+      LibraryComic at(String folder, String file) =>
+          LibraryComic(entry(folder, file), null);
+      final pack = at(
+        '2026.11.18 DC Week',
+        'Batwoman 009 (2026) (digital) (Subrosa-DCP).cbz',
+      );
+      expect(pack.seriesWithSource, ('Batwoman', FieldSource.fileName));
+      expect(pack.nameGuess.series, 'Batwoman');
+      expect(at('Image', 'Saga 054 (2018).cbr').series, 'Saga');
+      // Same series, folder's fuller name wins.
+      expect(
+        at(
+          'Locke & Key - Welcome to Lovecraft (2008)',
+          'Locke & Key 001.cbz',
+        ).seriesWithSource,
+        ('Locke & Key - Welcome to Lovecraft', FieldSource.folder),
+      );
+      expect(at('Saga', 'saga_001.cbz').series, 'Saga');
+      expect(
+        at('Batman', 'Batman - Superman 001.cbz').series,
+        'Batman - Superman',
+      );
+      expect(at('Saga', '001.cbz').series, 'Saga');
+      expect(at('Saga', 'Chapter 01.cbz').series, 'Saga');
     });
 
     test('series are grouped exactly as written, issues in number order', () {

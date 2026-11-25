@@ -153,3 +153,19 @@ newer).
   ComicInfo.xml or re-zipping keeps progress. CBR/CB7/CBT and PDF still use
   `fileFingerprint` (size + first/last 64 KiB); M6 must move progress to the
   new ID when it converts CBR→CBZ, rewrites CB7/CBT, or removes pages.
+- ComicInfo editor (M6, desktop only): "Edit details" in an issue's
+  long-press sheet opens a form for the ComicInfo v2.0 fields. Saving
+  rewrites the CBZ through a hidden temp file beside it (pages copied
+  without recompression, archive comment kept), checks the copy has the same
+  pages and the new XML, then renames it over the original. Fields not in
+  the form (`<Pages>`, unknown elements) are kept; new ones go in schema
+  order. Other formats say "Only CBZ files can be edited for now" (step 3).
+  Publisher and series groups have "Edit publisher" / "Edit series", which
+  sets that field in every CBZ in the group (skipping other formats and
+  files already set). Series from names: the folder name is used only when
+  the file name has no series or the folder gives a fuller name for the
+  same series, so pack folders (`2026.11.18 DC Week`) and publisher folders
+  don't name the series.
+- Folders of images aren't comics: the "Open folder of images" button and
+  `FolderPageSource` were removed (M0 had them), and the library only
+  lists comic files.

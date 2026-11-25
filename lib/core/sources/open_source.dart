@@ -4,7 +4,6 @@ import '../../platform/android_documents.dart';
 import 'archive_page_source.dart';
 import 'cbz_page_source.dart';
 import 'fingerprint.dart';
-import 'folder_page_source.dart';
 import 'page_source.dart';
 import 'pdf_page_source.dart';
 
@@ -21,14 +20,14 @@ const comicFileExtensions = [
 /// mislabelled comics (e.g. a ZIP named `.cbr`) are common.
 Future<PageSource> openSource(String path) async {
   if (AndroidDocuments.isContentUri(path)) return _openDocument(path);
-  switch (await FileSystemEntity.type(path)) {
-    case FileSystemEntityType.directory:
-      return FolderPageSource.open(path);
-    case FileSystemEntityType.file:
-      return _openFile(path);
-    default:
-      throw UnsupportedSourceException('Not found: $path');
-  }
+  // Only comic files: a folder of loose images isn't a comic.
+  return switch (await FileSystemEntity.type(path)) {
+    FileSystemEntityType.file => _openFile(path),
+    FileSystemEntityType.directory => throw UnsupportedSourceException(
+      'Not a comic file: $path',
+    ),
+    _ => throw UnsupportedSourceException('Not found: $path'),
+  };
 }
 
 Future<PageSource> _openDocument(String uri) async {

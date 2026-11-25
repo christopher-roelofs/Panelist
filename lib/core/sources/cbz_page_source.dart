@@ -159,6 +159,16 @@ class CbzPageSource implements EncodedPageSource {
   }
 }
 
+/// A CBZ's page images in reading order.
+List<ArchiveFile> cbzPages(Archive archive) => [
+  for (final f in archive.files)
+    if (f.isFile && isPageEntry(f.name)) f,
+]..sort((a, b) => naturalCompare(a.name, b.name));
+
+/// The book ID of a CBZ with [pages] (see [pagesFingerprint]).
+String? cbzPagesFingerprint(List<ArchiveFile> pages) =>
+    pagesFingerprint([for (final f in pages) (crc32: f.crc32, size: f.size)]);
+
 void _workerMain((SendPort, String, String) init) {
   final (reply, path, name) = init;
   final InputFileStream input;
@@ -171,10 +181,7 @@ void _workerMain((SendPort, String, String) init) {
         ? InputFileStream(path)
         : InputFileStream.withFileHandle(FdFileHandle(fd));
     final archive = ZipDecoder().decodeStream(input);
-    pages = [
-      for (final f in archive.files)
-        if (f.isFile && isPageEntry(f.name)) f,
-    ]..sort((a, b) => naturalCompare(a.name, b.name));
+    pages = cbzPages(archive);
     // Prefer the shallowest ComicInfo.xml if there are several.
     int depth(ArchiveFile f) => '/'.allMatches(f.name).length;
     final infos = [
@@ -183,11 +190,7 @@ void _workerMain((SendPort, String, String) init) {
     ]..sort((a, b) => depth(a) - depth(b));
     comicInfo = infos.firstOrNull;
     // From the pages, so writing ComicInfo.xml keeps the book's identity.
-    fingerprint =
-        pagesFingerprint([
-          for (final f in pages) (crc32: f.crc32, size: f.size),
-        ]) ??
-        fileFingerprint(path);
+    fingerprint = cbzPagesFingerprint(pages) ?? fileFingerprint(path);
   } catch (e) {
     reply.send(('error', 'Not a readable CBZ/ZIP file: $name'));
     return;

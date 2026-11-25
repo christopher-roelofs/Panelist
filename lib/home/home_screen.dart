@@ -45,11 +45,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (file != null && mounted) await openInReader(context, ref, file.path);
   }
 
-  Future<void> _pickFolder() async {
-    final dir = await getDirectoryPath(confirmButtonText: 'Open');
-    if (dir != null && mounted) await openInReader(context, ref, dir);
-  }
-
   Future<void> _openRecent(Book book) async {
     final exists = AndroidDocuments.isContentUri(book.path)
         ? await AndroidDocuments.exists(book.path)
@@ -172,13 +167,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 icon: const Icon(Icons.file_open_outlined),
                 onPressed: _pickFile,
               ),
-              // Folders of images need SAF tree access on Android (later).
-              if (!AndroidDocuments.isSupported)
-                IconButton(
-                  tooltip: 'Open folder of images',
-                  icon: const Icon(Icons.folder_open_outlined),
-                  onPressed: _pickFolder,
-                ),
               IconButton(
                 tooltip: 'Settings',
                 icon: const Icon(Icons.settings_outlined),

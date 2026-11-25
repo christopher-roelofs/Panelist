@@ -8,6 +8,8 @@ import 'package:path/path.dart' as p;
 import '../app/providers.dart';
 import '../data/database.dart';
 import '../reader/open_book.dart';
+import 'bulk_field_editor.dart';
+import 'comic_info_editor.dart';
 import 'library_model.dart';
 import 'library_providers.dart';
 import 'library_scanner.dart';
@@ -50,6 +52,7 @@ class _Item {
     this.trailing,
     this.count,
     this.members = const [],
+    this.field,
   });
 
   final _Kind kind;
@@ -66,6 +69,10 @@ class _Item {
 
   /// Every comic in a group or folder (for marking them all read).
   final List<LibraryComic> members;
+
+  /// The ComicInfo field this group is named by, editable for all members
+  /// at once: (element, label, current value or null if unknown).
+  final (String, String, String?)? field;
 }
 
 class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
@@ -186,14 +193,42 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
         context: context,
         showDragHandle: true,
         isScrollControlled: true,
-        builder: (_) => _DetailsSheet(comic: c, onMark: _mark),
+        builder: (sheet) => _DetailsSheet(
+          comic: c,
+          onMark: _mark,
+          onEdit: isEditableComic(c.location)
+              ? () {
+                  Navigator.of(sheet).pop();
+                  unawaited(editComicInfo(context, c));
+                }
+              : null,
+        ),
       );
     }
     if (item.members.isEmpty) return null;
     return () => showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (_) => _GroupSheet(item: item, onMark: _mark),
+      builder: (sheet) => _GroupSheet(
+        item: item,
+        onMark: _mark,
+        onEdit: canEditMetadata && item.field != null
+            ? () {
+                Navigator.of(sheet).pop();
+                final (field, label, current) = item.field!;
+                unawaited(
+                  editFieldForAll(
+                    context,
+                    ref,
+                    comics: item.members,
+                    field: field,
+                    label: label,
+                    current: current,
+                  ),
+                );
+              }
+            : null,
+      ),
     );
   }
 
@@ -239,6 +274,7 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                   trailing: _plural(g.series.length, 'series', 'series'),
                   comic: g.first,
                   members: [for (final s in g.series) ...s.comics],
+                  field: ('Publisher', 'Publisher', g.name),
                   onTap: () => _push(g.name ?? _unknownPublisher),
                 ),
             ],
@@ -327,6 +363,7 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
     trailing: '${s.readCount}/${s.comics.length}',
     comic: s.first,
     members: s.comics,
+    field: ('Series', 'Series', s.name),
     onTap: () => _push(s.name),
   );
 
@@ -731,10 +768,17 @@ class _Row extends StatelessWidget {
 
 /// Where each of an issue's details came from.
 class _DetailsSheet extends StatelessWidget {
-  const _DetailsSheet({required this.comic, required this.onMark});
+  const _DetailsSheet({
+    required this.comic,
+    required this.onMark,
+    required this.onEdit,
+  });
 
   final LibraryComic comic;
   final _OnMark onMark;
+
+  /// Opens the metadata editor; null where the comic can't be edited.
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -775,6 +819,21 @@ class _DetailsSheet extends StatelessWidget {
                 showRead: comic.readState != ReadState.read,
                 showUnread: comic.readState != ReadState.unread,
                 onMark: onMark,
+                extra: [
+                  if (onEdit != null)
+                    OutlinedButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit details'),
+                    ),
+                ],
+              ),
+            ],
+            if (onEdit == null && canEditMetadata) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Only CBZ files can be edited for now.',
+                style: theme.textTheme.bodySmall,
               ),
             ],
             const SizedBox(height: 16),
@@ -828,6 +887,7 @@ class _MarkButtons extends StatelessWidget {
     this.showRead = true,
     this.showUnread = true,
     this.all = false,
+    this.extra = const [],
   });
 
   final List<LibraryComic> comics;
@@ -837,6 +897,9 @@ class _MarkButtons extends StatelessWidget {
 
   /// Says "all" (for a group).
   final bool all;
+
+  /// More buttons in the same row.
+  final List<Widget> extra;
 
   @override
   Widget build(BuildContext context) {
@@ -862,6 +925,7 @@ class _MarkButtons extends StatelessWidget {
             icon: const Icon(Icons.remove_done),
             label: Text('Mark ${which}as unread'),
           ),
+        ...extra,
       ],
     );
   }
@@ -869,10 +933,17 @@ class _MarkButtons extends StatelessWidget {
 
 /// Long-press on a series, publisher or folder.
 class _GroupSheet extends StatelessWidget {
-  const _GroupSheet({required this.item, required this.onMark});
+  const _GroupSheet({
+    required this.item,
+    required this.onMark,
+    required this.onEdit,
+  });
 
   final _Item item;
   final _OnMark onMark;
+
+  /// Edits the field the group is named by, for all its comics.
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -904,6 +975,14 @@ class _GroupSheet extends StatelessWidget {
               showUnread: unread < n,
               all: true,
               onMark: onMark,
+              extra: [
+                if (onEdit != null)
+                  OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: Text('Edit ${item.field!.$2.toLowerCase()}'),
+                  ),
+              ],
             ),
           ],
         ),

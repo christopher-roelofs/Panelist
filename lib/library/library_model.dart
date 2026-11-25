@@ -12,6 +12,16 @@ enum ReadState { unread, reading, read }
 /// A comic in the library with its reading progress and the names used to
 /// group it. ComicInfo.xml wins; without it the series comes from the
 /// comic's folder (when it's in one) or its file name.
+/// Whether two series names from file and folder names are the same series,
+/// or one is a shorter form of the other (ignoring case and punctuation).
+bool sameSeries(String a, String b) {
+  String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  final x = norm(a);
+  final y = norm(b);
+  if (x.isEmpty || y.isEmpty) return false;
+  return x.startsWith(y) || y.startsWith(x);
+}
+
 class LibraryComic {
   LibraryComic(this.entry, this.progress);
 
@@ -27,11 +37,46 @@ class LibraryComic {
 
   String get location => entry.location;
 
+  /// What the folder and file names say, ignoring ComicInfo (to fill in
+  /// ComicInfo from them).
+  ({String? series, String? number, int? year}) get nameGuess => (
+    series: _nameSeries?.$1,
+    number: _file.number,
+    year: _file.year ?? _folder?.year,
+  );
+
+  /// The series from the names. The folder's name is used only when it's
+  /// about this comic: the file name has no series of its own (`01.cbz`,
+  /// `Chapter 01.cbz`), or gives a fuller name for the same series (folder
+  /// `Locke & Key - Welcome to Lovecraft (2008)`, file `Locke & Key
+  /// 001.cbz`). Otherwise
+  /// the folder is something else (`2026.11.18 DC Week`, `Image`,
+  /// `Downloads`) and the file name wins.
+  late final (String, FieldSource)? _nameSeries = () {
+    final file = _file.series;
+    final folder = _folder?.series;
+    if (folder != null) {
+      if (file == null || _genericSeries.hasMatch(file)) {
+        return (folder, FieldSource.folder);
+      }
+      // Same series: the fuller name (a folder `Batman` doesn't shorten
+      // `Batman - Superman 001`).
+      if (sameSeries(file, folder) && folder.length >= file.length) {
+        return (folder, FieldSource.folder);
+      }
+    }
+    return file == null ? null : (file, FieldSource.fileName);
+  }();
+
+  static final _genericSeries = RegExp(
+    r'^(?:ch(?:apter)?|issue|part|vol(?:ume)?|v|episode|ep|book|no)$',
+    caseSensitive: false,
+  );
+
   (String, FieldSource) get seriesWithSource {
     if (entry.series case final s?) return (s, FieldSource.comicInfo);
-    if (_folder?.series case final s?) return (s, FieldSource.folder);
-    if (_file.series case final s?) return (s, FieldSource.fileName);
-    return (p.basenameWithoutExtension(entry.fileName), FieldSource.fileName);
+    return _nameSeries ??
+        (p.basenameWithoutExtension(entry.fileName), FieldSource.fileName);
   }
 
   String get series => seriesWithSource.$1;

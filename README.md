@@ -12,7 +12,7 @@ flutter run -d linux                            # home screen with recent books
 flutter run -d linux -a "/path/to/Comic 01.cbz" # open a comic directly
 ```
 
-Opens CBZ, CBR (RAR 4/5), CB7, CBT and PDF files, plus folders of images.
+Opens CBZ, CBR (RAR 4/5), CB7, CBT and PDF files.
 Formats are detected from file content, so mislabelled files still open.
 Two-page spreads pair portrait pages automatically (wide, pre-joined
 spreads stay on their own), and ComicInfo.xml series/number/credits are
