@@ -59,8 +59,13 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
   (`/proc/self/fd/N` + `pread`/`archive_read_open_fd`/pdfrx `openCustom`),
   because reopening that path fails with EACCES; see `fd_file.dart`.
   Non-seekable providers are copied to `cache/documents/` (not yet swept).
-- M4 remaining: phone testing and memory tuning, release build, folder
-  (SAF tree) support, cache sweep.
+- Release build: `flutter build apk --release` (still signed with the debug
+  key; a real release key comes with publishing). The `lintVital*` tasks are
+  disabled in `android/build.gradle.kts` because lint crashes on JDK 17.
+  Tablet (Tab S6 Lite, release): cold start ~0.6 s; paging through a
+  151-page CBZ levels off around 250–300 MB PSS with the image cache sized
+  to ~6 screen pages on Android (`_sizeImageCache` in `main.dart`).
+- M4 remaining: phone testing, cache/documents sweep.
 - Touch: all touch gestures go through one recognizer inside the zoom
   viewer (`_TouchRecognizer` in `zoomable_page.dart`); InteractiveViewer
   only serves mouse/trackpad. One finger: page drag (unzoomed), pan with

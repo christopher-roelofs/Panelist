@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -17,6 +18,7 @@ import 'platform/android_documents.dart';
 /// `panelist [path]` opens [path] directly in the reader.
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  _sizeImageCache();
 
   ArchivePageSource.cacheRoot = Directory(
     p.join((await getApplicationCacheDirectory()).path, 'extracted'),
@@ -44,6 +46,19 @@ Future<void> main(List<String> args) async {
       child: PanelistApp(initialPath: args.isEmpty ? null : args.first),
     ),
   );
+}
+
+/// On phones and tablets, keeps decoded images to about what the reader
+/// needs (the visible page and the preloaded ones, at screen size) instead
+/// of Flutter's flat 100 MB, which is a lot on a 3–4 GB device.
+void _sizeImageCache() {
+  if (!AndroidDocuments.isSupported) return;
+  final views = WidgetsBinding.instance.platformDispatcher.views;
+  if (views.isEmpty) return;
+  final size = views.first.physicalSize;
+  final pageBytes = (size.width * size.height * 4).round();
+  final cache = PaintingBinding.instance.imageCache;
+  cache.maximumSizeBytes = math.max(48 << 20, pageBytes * 6);
 }
 
 class PanelistApp extends StatelessWidget {
