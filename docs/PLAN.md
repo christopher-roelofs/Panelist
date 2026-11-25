@@ -122,8 +122,12 @@ newer).
   Search matches every word against series, title, file name, publisher
   and `#number`. Covers of comics that left the library are deleted after
   each scan.
-- Library follow-ups: watching folders for changes; folders of images as
-  library items.
+- Library follow-ups: folders of images as library items.
+- Auto refresh (`lib/library/library_refresh.dart`): on disk, every library
+  folder is watched (Dart's recursive watch misses subfolders on Linux) and
+  re-watched after each scan; changes are debounced 2 s into one scan.
+  Android `content://` folders can't be watched, so the app rescans when it
+  comes back to the foreground, at most every 30 s.
 - Themes (`lib/app/theme.dart`, Settings screen): System / Light / Dark /
   Black (true black), and an accent (Wallpaper on Android 12+, Grey, Blue
   (default), Teal, Green, Purple, Pink, Amber, Orange). Backgrounds always

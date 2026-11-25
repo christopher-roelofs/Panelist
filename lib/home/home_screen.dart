@@ -11,6 +11,7 @@ import '../core/sources/open_source.dart';
 import '../data/book_extensions.dart';
 import '../data/database.dart';
 import '../library/library_providers.dart';
+import '../library/library_refresh.dart';
 import '../library/library_scanner.dart';
 import '../library/library_view.dart';
 import '../platform/android_documents.dart';
@@ -78,10 +79,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Pick up comics added or changed since the last run.
+    // Pick up comics added or changed since the last run, then keep up
+    // with changes (folder watching, and rescans on coming back).
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(ref.read(libraryScanProvider.notifier).scan());
+      if (!mounted) return;
+      unawaited(ref.read(libraryScanProvider.notifier).scan());
+      final refresh = ref.read(libraryRefreshProvider);
+      _lifecycle = AppLifecycleListener(onResume: refresh.onResumed);
     });
+  }
+
+  AppLifecycleListener? _lifecycle;
+
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    super.dispose();
   }
 
   @override
