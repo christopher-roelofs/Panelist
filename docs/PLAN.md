@@ -80,5 +80,8 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
   then the file name (`comic_name.dart`). Publisher names are shown exactly
   as written (no merging). Progress joins on the content fingerprint, so it
   is shared with books opened outside the library.
-- Library follow-ups: search; watching folders for changes; removing cover
-  files of comics that left the library; folders of images as library items.
+  Search matches every word against series, title, file name, publisher
+  and `#number`. Covers of comics that left the library are deleted after
+  each scan.
+- Library follow-ups: watching folders for changes; folders of images as
+  library items; mark as read/unread.

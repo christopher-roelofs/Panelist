@@ -20,7 +20,11 @@ class LibraryBrowser extends ConsumerStatefulWidget {
     super.key,
     this.leading = const [],
     required this.onOpenFile,
+    this.query = '',
   });
+
+  /// When not empty, shows matching comics instead of browsing.
+  final String query;
 
   final List<Widget> leading;
 
@@ -83,11 +87,22 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
         SliverToBoxAdapter(child: _SetUpLibrary(onOpenFile: widget.onOpenFile)),
       );
     } else {
-      final (crumbs, items) = _level(prefs.view, roots, comics);
+      final query = widget.query.trim();
+      final (crumbs, items) = query.isEmpty
+          ? _level(prefs.view, roots, comics)
+          : (
+              ['Results for “$query”'],
+              [
+                for (final c in searchComics(comics, query))
+                  _issueItem(c, title: '${c.series} ${c.issueLabel}'),
+              ],
+            );
       slivers
         ..add(
           SliverToBoxAdapter(
-            child: _Header(prefs: prefs, onView: _onView),
+            child: query.isEmpty
+                ? _Header(prefs: prefs, onView: _onView)
+                : const SizedBox(height: 8),
           ),
         )
         ..add(
@@ -102,7 +117,9 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
               padding: const EdgeInsets.all(32),
               child: Center(
                 child: Text(
-                  scan.running
+                  query.isNotEmpty
+                      ? 'No comics match “$query”.'
+                      : scan.running
                       ? 'Looking for comics…'
                       : comics.isEmpty
                       ? 'No comics found in your library folders.'
@@ -144,7 +161,7 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
     }
 
     return PopScope(
-      canPop: _path.isEmpty,
+      canPop: _path.isEmpty || widget.query.trim().isNotEmpty,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _path.isNotEmpty) _goTo(_path.length - 1);
       },

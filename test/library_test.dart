@@ -134,6 +134,24 @@ void main() {
       expect(pubs[1].first.number, '1');
     });
 
+    test('search matches every word, in series then issue order', () {
+      String names(String q) => searchComics(
+        comics,
+        q,
+      ).map((c) => '${c.series} ${c.number}').join(', ');
+      expect(
+        names('locke'),
+        'Locke & Key: Welcome to Lovecraft 1, '
+        'Locke & Key: Welcome to Lovecraft 2, '
+        'Locke & Key: Welcome to Lovecraft 10',
+      );
+      expect(names('LOCKE #10'), 'Locke & Key: Welcome to Lovecraft 10');
+      expect(names('image'), contains('Eight Billion Genies'));
+      expect(names('atomic war'), 'Atomic War 1');
+      expect(names('  '), '');
+      expect(names('nothing like this'), '');
+    });
+
     test('folder contents', () {
       final (top, files) = folderContents(comics, 1, '');
       expect(top.map((f) => f.name), [
@@ -243,6 +261,20 @@ void main() {
         expect(entries.map((e) => e.fileName), ['a.cbz', 'top.pdf']);
       },
     );
+
+    test('covers of comics that left the library are deleted', () async {
+      put('a.cbz');
+      put('b.cbz');
+      await db.addRoot(p.join(dir.path, 'comics'), 'comics');
+      await scan();
+      final covers = Directory(p.join(dir.path, '.covers'));
+      expect(covers.listSync(), hasLength(2));
+      File(p.join(dir.path, 'comics', 'b.cbz')).deleteSync();
+      await scan();
+      expect(covers.listSync().map((f) => p.basename(f.path)), [
+        'id-a.cbz.png',
+      ]);
+    });
 
     test('a missing folder keeps its comics', () async {
       put('a.cbz');

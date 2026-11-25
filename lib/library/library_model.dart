@@ -193,3 +193,27 @@ class FolderGroup {
     files..sort((a, b) => naturalCompare(a.entry.fileName, b.entry.fileName)),
   );
 }
+
+/// Comics whose series, title, file name or publisher contain every word
+/// of [query] (case-insensitive), in series then issue order.
+List<LibraryComic> searchComics(Iterable<LibraryComic> comics, String query) {
+  final words = query.toLowerCase().split(RegExp(r'\s+'))
+    ..removeWhere((w) => w.isEmpty);
+  if (words.isEmpty) return const [];
+  final hits = [
+    for (final c in comics)
+      if ([
+            c.series,
+            c.entry.title ?? '',
+            c.entry.fileName,
+            c.publisher ?? '',
+            c.number == null ? '' : '#${c.number}',
+          ].join(' ').toLowerCase()
+          case final text when words.every(text.contains))
+        c,
+  ];
+  return hits..sort((a, b) {
+    final s = naturalCompare(a.series, b.series);
+    return s != 0 ? s : compareIssues(a, b);
+  });
+}

@@ -242,5 +242,24 @@ class LibraryScanner extends Notifier<ScanStatus> {
         );
       }
     }
+    if (ref.mounted) await _removeUnusedCovers(db, covers);
+  }
+
+  /// Deletes covers of comics no longer in the library.
+  Future<void> _removeUnusedCovers(AppDatabase db, Directory covers) async {
+    final used = {
+      for (final root in await db.roots())
+        for (final e in await db.entriesOf(root.id))
+          if (e.bookId case final id?) '$id.png',
+    };
+    await for (final f in covers.list()) {
+      if (f is File && !used.contains(p.basename(f.path))) {
+        try {
+          await f.delete();
+        } on FileSystemException {
+          // Try again next scan.
+        }
+      }
+    }
   }
 }

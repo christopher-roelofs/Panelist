@@ -85,6 +85,9 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _dragging = false;
 
+  /// Null when not searching.
+  String? _query;
+
   Future<void> _pickFile() async {
     if (AndroidDocuments.isSupported) {
       final uri = await AndroidDocuments.pick();
@@ -160,70 +163,100 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           unawaited(openInReader(context, ref, details.files.first.path));
         }
       },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Panelist'),
-          bottom: scan.running
-              ? PreferredSize(
-                  preferredSize: const Size.fromHeight(3),
-                  child: LinearProgressIndicator(
-                    minHeight: 3,
-                    value: scan.total == 0 ? null : scan.done / scan.total,
+      child: PopScope(
+        canPop: _query == null,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) setState(() => _query = null);
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            leading: _query == null
+                ? null
+                : IconButton(
+                    tooltip: 'Close search',
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => setState(() => _query = null),
                   ),
-                )
-              : null,
-          actions: [
-            if (hasLibrary)
-              IconButton(
-                tooltip: scan.running
-                    ? 'Scanning (${scan.done} of ${scan.total})'
-                    : 'Rescan library',
-                icon: const Icon(Icons.refresh),
-                onPressed: () => ref.read(libraryScanProvider.notifier).scan(),
-              ),
-            IconButton(
-              tooltip: 'Open file',
-              icon: const Icon(Icons.file_open_outlined),
-              onPressed: _pickFile,
-            ),
-            // Folders of images need SAF tree access on Android (later).
-            if (!AndroidDocuments.isSupported)
-              IconButton(
-                tooltip: 'Open folder of images',
-                icon: const Icon(Icons.folder_open_outlined),
-                onPressed: _pickFolder,
-              ),
-            IconButton(
-              tooltip: 'Library folders',
-              icon: const Icon(Icons.settings_outlined),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const LibrarySettingsScreen(),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: DecoratedBox(
-          position: DecorationPosition.foreground,
-          decoration: BoxDecoration(
-            border: _dragging
-                ? Border.all(color: scheme.primary, width: 3)
+            title: _query == null
+                ? const Text('Panelist')
+                : TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Search series, titles, publishers',
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (q) => setState(() => _query = q),
+                  ),
+            bottom: scan.running
+                ? PreferredSize(
+                    preferredSize: const Size.fromHeight(3),
+                    child: LinearProgressIndicator(
+                      minHeight: 3,
+                      value: scan.total == 0 ? null : scan.done / scan.total,
+                    ),
+                  )
                 : null,
-          ),
-          child: LibraryBrowser(
-            onOpenFile: _pickFile,
-            leading: [
-              if (unfinished.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: _ContinueReading(
-                    books: unfinished,
-                    onOpen: _openRecent,
-                    onRemove: _forget,
+            actions: [
+              if (hasLibrary && _query == null)
+                IconButton(
+                  tooltip: 'Search library',
+                  icon: const Icon(Icons.search),
+                  onPressed: () => setState(() => _query = ''),
+                ),
+              if (hasLibrary && _query == null)
+                IconButton(
+                  tooltip: scan.running
+                      ? 'Scanning (${scan.done} of ${scan.total})'
+                      : 'Rescan library',
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () =>
+                      ref.read(libraryScanProvider.notifier).scan(),
+                ),
+              IconButton(
+                tooltip: 'Open file',
+                icon: const Icon(Icons.file_open_outlined),
+                onPressed: _pickFile,
+              ),
+              // Folders of images need SAF tree access on Android (later).
+              if (!AndroidDocuments.isSupported)
+                IconButton(
+                  tooltip: 'Open folder of images',
+                  icon: const Icon(Icons.folder_open_outlined),
+                  onPressed: _pickFolder,
+                ),
+              IconButton(
+                tooltip: 'Library folders',
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const LibrarySettingsScreen(),
                   ),
                 ),
+              ),
+              const SizedBox(width: 8),
             ],
+          ),
+          body: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              border: _dragging
+                  ? Border.all(color: scheme.primary, width: 3)
+                  : null,
+            ),
+            child: LibraryBrowser(
+              onOpenFile: _pickFile,
+              query: _query ?? '',
+              leading: [
+                if (unfinished.isNotEmpty && _query == null)
+                  SliverToBoxAdapter(
+                    child: _ContinueReading(
+                      books: unfinished,
+                      onOpen: _openRecent,
+                      onRemove: _forget,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
