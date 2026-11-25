@@ -10,6 +10,8 @@ import 'app/providers.dart';
 import 'core/sources/archive_page_source.dart';
 import 'data/database.dart';
 import 'home/home_screen.dart';
+import 'library/library_providers.dart';
+import 'library/library_scanner.dart';
 import 'platform/android_documents.dart';
 
 /// `panelist [path]` opens [path] directly in the reader.
@@ -22,6 +24,10 @@ Future<void> main(List<String> args) async {
   unawaited(ArchivePageSource.cleanStaleCache());
   final db = AppDatabase();
   final defaults = await ReaderDefaultsNotifier.load(db);
+  final libraryPrefs = await LibraryPrefsNotifier.load(db);
+  final covers = Directory(
+    p.join((await getApplicationSupportDirectory()).path, 'covers'),
+  );
 
   runApp(
     ProviderScope(
@@ -30,6 +36,10 @@ Future<void> main(List<String> args) async {
         readerDefaultsProvider.overrideWith(
           () => ReaderDefaultsNotifier(defaults),
         ),
+        libraryPrefsProvider.overrideWith(
+          () => LibraryPrefsNotifier(libraryPrefs),
+        ),
+        coversDirProvider.overrideWithValue(covers),
       ],
       child: PanelistApp(initialPath: args.isEmpty ? null : args.first),
     ),

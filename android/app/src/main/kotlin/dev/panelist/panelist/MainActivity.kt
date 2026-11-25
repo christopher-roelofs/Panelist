@@ -3,6 +3,7 @@ package dev.panelist.panelist
 import android.content.Intent
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.system.ErrnoException
 import android.system.Os
@@ -26,6 +27,7 @@ class MainActivity : FlutterActivity() {
     private lateinit var channel: MethodChannel
     private val io = Executors.newSingleThreadExecutor()
     private var pendingPick: MethodChannel.Result? = null
+    private var pendingTree: MethodChannel.Result? = null
 
     /** A VIEW intent's URI not yet collected by Dart. */
     private var initialUri: String? = null
@@ -50,6 +52,8 @@ class MainActivity : FlutterActivity() {
                 initialUri = null
             }
             "pickDocument" -> pickDocument(result)
+            "pickTree" -> pickTree(result)
+            "listTree" -> background(result) { listTree(Uri.parse(call.arguments as String)) }
             "open" -> background(result) { open(Uri.parse(call.arguments as String)) }
             "closeFd" -> background(result) {
                 ParcelFileDescriptor.adoptFd(call.arguments as Int).close()
@@ -83,9 +87,91 @@ class MainActivity : FlutterActivity() {
         startActivityForResult(intent, PICK_REQUEST)
     }
 
+    private fun pickTree(result: MethodChannel.Result) {
+        if (pendingTree != null) {
+            result.error("busy", "A picker is already open", null)
+            return
+        }
+        pendingTree = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+            )
+        }
+        startActivityForResult(intent, TREE_REQUEST)
+    }
+
+    /** Called with a picked folder: returns `{uri, name}` once access persists. */
+    private fun onTreePicked(resultCode: Int, data: Intent?) {
+        val result = pendingTree ?: return
+        pendingTree = null
+        val tree = data?.data
+        if (resultCode != RESULT_OK || tree == null) {
+            result.success(null)
+            return
+        }
+        persist(tree)
+        io.execute {
+            val root = DocumentsContract.buildDocumentUriUsingTree(
+                tree,
+                DocumentsContract.getTreeDocumentId(tree),
+            )
+            val name = displayName(root) ?: "Comics"
+            runOnUiThread { result.success(mapOf("uri" to tree.toString(), "name" to name)) }
+        }
+    }
+
+    /**
+     * Every file under the folder [tree], as `{uri, folder, name, size,
+     * modified}` maps; `folder` is the `/`-separated path inside [tree].
+     * Hidden files and folders are skipped.
+     */
+    private fun listTree(tree: Uri): List<Map<String, Any?>> {
+        val out = ArrayList<Map<String, Any?>>()
+        val columns = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+        )
+        val pending = ArrayDeque<Pair<String, String>>()
+        pending.add(DocumentsContract.getTreeDocumentId(tree) to "")
+        while (pending.isNotEmpty()) {
+            val (docId, folder) = pending.removeFirst()
+            val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId)
+            contentResolver.query(children, columns, null, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getString(0)
+                    val name = c.getString(1) ?: continue
+                    if (name.startsWith(".")) continue
+                    if (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        pending.add(id to if (folder.isEmpty()) name else "$folder/$name")
+                    } else {
+                        out.add(
+                            mapOf(
+                                "uri" to DocumentsContract.buildDocumentUriUsingTree(tree, id).toString(),
+                                "folder" to folder,
+                                "name" to name,
+                                "size" to if (c.isNull(3)) 0L else c.getLong(3),
+                                "modified" to if (c.isNull(4)) 0L else c.getLong(4),
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+        return out
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == TREE_REQUEST) {
+            onTreePicked(resultCode, data)
+            return
+        }
         if (requestCode != PICK_REQUEST) return
         val result = pendingPick ?: return
         pendingPick = null
@@ -194,5 +280,6 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "panelist/android"
         private const val PICK_REQUEST = 7301
+        private const val TREE_REQUEST = 7302
     }
 }

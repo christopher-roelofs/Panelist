@@ -16,6 +16,7 @@ class BookInfoDialog extends StatelessWidget {
       ('Series', book.series),
       ('Number', book.number),
       ('Year', book.year?.toString()),
+      ('Publisher', book.publisher),
       ('Writer', book.writer),
       ('Artist', book.artist),
       (

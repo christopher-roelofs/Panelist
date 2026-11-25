@@ -55,6 +55,7 @@ BooksCompanion metadataFrom(ComicInfo info) => BooksCompanion(
   year: Value(info.year),
   writer: Value(info.writer),
   artist: Value(info.artist),
+  publisher: Value(info.publisher),
   summary: Value(info.summary),
   rightToLeft: Value(info.rightToLeft),
 );

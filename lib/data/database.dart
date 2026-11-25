@@ -23,6 +23,9 @@ class Books extends Table {
   TextColumn get summary => text().nullable()();
   BoolColumn get rightToLeft => boolean().nullable()();
 
+  // --- v3 ---
+  TextColumn get publisher => text().nullable()();
+
   // --- v2: cached page sizes, JSON `[[w,h] | null, ...]` ---
   TextColumn get pageSizes => text().nullable()();
 
@@ -44,7 +47,51 @@ class Settings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Books, Settings])
+/// A folder the library is built from: a path, or on Android a
+/// `content://` tree URI with persisted read access.
+class LibraryRoots extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get location => text().unique()();
+  TextColumn get name => text()();
+}
+
+/// A comic file found in a library folder. Metadata here is what the file's
+/// ComicInfo.xml says (null when absent); names parsed from file and folder
+/// names are derived at display time so parser fixes need no rescan.
+class LibraryEntries extends Table {
+  /// File path, or on Android the document URI.
+  TextColumn get location => text()();
+  IntColumn get rootId => integer()();
+
+  /// Folder inside the root, `/`-separated; empty at the root itself.
+  TextColumn get folder => text()();
+  TextColumn get fileName => text()();
+  IntColumn get size => integer()();
+
+  /// Modification time, ms since the epoch (0 if unknown).
+  IntColumn get modified => integer()();
+
+  /// The book's [Books.id] (content fingerprint), once scanned.
+  TextColumn get bookId => text().nullable()();
+  IntColumn get pageCount => integer().nullable()();
+  TextColumn get series => text().nullable()();
+  TextColumn get number => text().nullable()();
+  IntColumn get volume => integer().nullable()();
+  IntColumn get year => integer().nullable()();
+  TextColumn get publisher => text().nullable()();
+  TextColumn get title => text().nullable()();
+
+  /// Why the last scan couldn't read this file, if it couldn't.
+  TextColumn get error => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {location};
+}
+
+/// Reading position of a book, without the heavier columns.
+typedef BookProgress = ({int currentPage, int pageCount});
+
+@DriftDatabase(tables: [Books, Settings, LibraryRoots, LibraryEntries])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
     : super(
@@ -59,7 +106,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -80,6 +127,11 @@ class AppDatabase extends _$AppDatabase {
         ]) {
           await m.addColumn(books, column);
         }
+      }
+      if (from < 3) {
+        await m.addColumn(books, books.publisher);
+        await m.createTable(libraryRoots);
+        await m.createTable(libraryEntries);
       }
     },
   );
@@ -162,4 +214,55 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> setSetting(String key, String value) => into(settings)
       .insertOnConflictUpdate(SettingsCompanion.insert(key: key, value: value));
+
+  // --- Library ---
+
+  Stream<List<LibraryRoot>> watchRoots() => (select(
+    libraryRoots,
+  )..orderBy([(r) => OrderingTerm.asc(r.name)])).watch();
+
+  Future<List<LibraryRoot>> roots() => select(libraryRoots).get();
+
+  /// Adds a library folder (no-op if it's already there).
+  Future<void> addRoot(String location, String name) =>
+      into(libraryRoots).insert(
+        LibraryRootsCompanion.insert(location: location, name: name),
+        mode: InsertMode.insertOrIgnore,
+      );
+
+  Future<void> removeRoot(int id) => transaction(() async {
+    await (delete(libraryEntries)..where((e) => e.rootId.equals(id))).go();
+    await (delete(libraryRoots)..where((r) => r.id.equals(id))).go();
+  });
+
+  Stream<List<LibraryEntry>> watchEntries() => select(libraryEntries).watch();
+
+  Future<List<LibraryEntry>> entriesOf(int rootId) =>
+      (select(libraryEntries)..where((e) => e.rootId.equals(rootId))).get();
+
+  Future<void> putEntry(LibraryEntriesCompanion entry) =>
+      into(libraryEntries).insertOnConflictUpdate(entry);
+
+  Future<void> updateEntry(String location, LibraryEntriesCompanion data) =>
+      (update(
+        libraryEntries,
+      )..where((e) => e.location.equals(location))).write(data);
+
+  Future<void> deleteEntries(Iterable<String> locations) =>
+      (delete(libraryEntries)..where((e) => e.location.isIn(locations))).go();
+
+  /// Progress of every book that has been opened, by [Books.id].
+  Stream<Map<String, BookProgress>> watchProgress() {
+    final q = selectOnly(books)
+      ..addColumns([books.id, books.currentPage, books.pageCount]);
+    return q.watch().map(
+      (rows) => {
+        for (final r in rows)
+          r.read(books.id)!: (
+            currentPage: r.read(books.currentPage)!,
+            pageCount: r.read(books.pageCount)!,
+          ),
+      },
+    );
+  }
 }

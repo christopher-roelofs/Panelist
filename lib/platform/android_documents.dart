@@ -24,6 +24,35 @@ abstract final class AndroidDocuments {
   static Future<String?> pick() =>
       _channel.invokeMethod<String>('pickDocument');
 
+  /// Shows the system folder picker. Returns the folder's tree URI (with
+  /// read access persisted) and display name.
+  static Future<({String uri, String name})?> pickTree() async {
+    final r = await _channel.invokeMapMethod<String, Object?>('pickTree');
+    if (r == null) return null;
+    return (uri: r['uri']! as String, name: r['name']! as String);
+  }
+
+  /// Every file under the folder [treeUri], recursively (hidden ones
+  /// skipped).
+  static Future<List<TreeFile>> listTree(String treeUri) async {
+    final List<Object?> list;
+    try {
+      list = (await _channel.invokeListMethod<Object?>('listTree', treeUri))!;
+    } on PlatformException catch (e) {
+      throw FileSystemException(e.message ?? 'Could not list folder', treeUri);
+    }
+    return [
+      for (final m in list.cast<Map<Object?, Object?>>())
+        TreeFile(
+          uri: m['uri']! as String,
+          folder: m['folder']! as String,
+          name: m['name']! as String,
+          size: (m['size']! as num).toInt(),
+          modified: (m['modified']! as num).toInt(),
+        ),
+    ];
+  }
+
   /// The URI this launch was asked to view ("Open with"), once.
   static Future<String?> takeInitialUri() async {
     if (!isSupported) return null;
@@ -76,4 +105,25 @@ class OpenedDocument {
   final String path;
   final String? name;
   final Future<void> Function()? release;
+}
+
+/// A file found by [AndroidDocuments.listTree].
+class TreeFile {
+  const TreeFile({
+    required this.uri,
+    required this.folder,
+    required this.name,
+    required this.size,
+    required this.modified,
+  });
+
+  final String uri;
+
+  /// `/`-separated folder inside the tree; empty at its top.
+  final String folder;
+  final String name;
+  final int size;
+
+  /// ms since the epoch, 0 if unknown.
+  final int modified;
 }

@@ -23,7 +23,7 @@ lib/
   core/imaging/    decode at display size, LRU cache, preloading
   core/metadata/   ComicInfo.xml
   reader/          reader screen, layouts, gestures, keyboard/mouse
-  library/         (later) folders, scanning, thumbnails
+  library/         library folders, scanning, grouping, browser UI
   platform/        file access (desktop paths, Android SAF)
 ```
 `PageSource`: `int pageCount`, `Future<Uint8List> page(int i)`, `close()`.
@@ -44,7 +44,7 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
 | M2 ✅ | Formats: CBR/CB7/CBT via libarchive FFI, PDF via pdfrx | All common formats open |
 | M3 ✅ | Double-page spreads (auto wide-page detection, cover offset), per-book settings, ComicInfo.xml | Spreads read correctly |
 | M4 | Android: SAF file access, "Open with" intents, touch tuning, memory tuning on phones | Usable on Android phone + tablet |
-| M5 | Library: watched folders, thumbnails, continue reading, series/issue sorting | Home screen with Continue Reading |
+| M5 | Library: library folders, thumbnails, continue reading, Folders / Series / Publishers views | Home screen with Continue Reading |
 | Later | RTL manga, webtoon scroll, panel zoom, OPDS/Komga, Windows/macOS/iOS, AVIF/JXL | |
 
 ## Notes and known follow-ups
@@ -70,3 +70,15 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
   page view ignore a second finger.
 - Reader: paging backwards in fit-width should land at the bottom of the
   previous page.
+- Library (M5, in progress): library folders are paths, or on Android SAF
+  tree URIs (`pickTree`/`listTree` in `MainActivity.kt`); comics inside are
+  read via their document URIs like single files. `LibraryScanner` lists
+  every folder on start and on rescan, and reopens only new files or files
+  whose size/mtime changed, storing ComicInfo fields in `library_entries`
+  and covers as `<support>/covers/<bookId>.png`. Grouping is display-time
+  (`library_model.dart`): ComicInfo first, then the parent folder's name,
+  then the file name (`comic_name.dart`). Publisher names are shown exactly
+  as written (no merging). Progress joins on the content fingerprint, so it
+  is shared with books opened outside the library.
+- Library follow-ups: search; watching folders for changes; removing cover
+  files of comics that left the library; folders of images as library items.

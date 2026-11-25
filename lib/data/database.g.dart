@@ -148,6 +148,17 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
       'CHECK ("right_to_left" IN (0, 1))',
     ),
   );
+  static const VerificationMeta _publisherMeta = const VerificationMeta(
+    'publisher',
+  );
+  @override
+  late final GeneratedColumn<String> publisher = GeneratedColumn<String>(
+    'publisher',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _pageSizesMeta = const VerificationMeta(
     'pageSizes',
   );
@@ -211,6 +222,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     artist,
     summary,
     rightToLeft,
+    publisher,
     pageSizes,
     fitMode,
     layoutMode,
@@ -325,6 +337,12 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         ),
       );
     }
+    if (data.containsKey('publisher')) {
+      context.handle(
+        _publisherMeta,
+        publisher.isAcceptableOrUnknown(data['publisher']!, _publisherMeta),
+      );
+    }
     if (data.containsKey('page_sizes')) {
       context.handle(
         _pageSizesMeta,
@@ -414,6 +432,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.bool,
         data['${effectivePrefix}right_to_left'],
       ),
+      publisher: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}publisher'],
+      ),
       pageSizes: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}page_sizes'],
@@ -454,6 +476,7 @@ class Book extends DataClass implements Insertable<Book> {
   final String? artist;
   final String? summary;
   final bool? rightToLeft;
+  final String? publisher;
   final String? pageSizes;
   final String? fitMode;
   final String? layoutMode;
@@ -473,6 +496,7 @@ class Book extends DataClass implements Insertable<Book> {
     this.artist,
     this.summary,
     this.rightToLeft,
+    this.publisher,
     this.pageSizes,
     this.fitMode,
     this.layoutMode,
@@ -510,6 +534,9 @@ class Book extends DataClass implements Insertable<Book> {
     }
     if (!nullToAbsent || rightToLeft != null) {
       map['right_to_left'] = Variable<bool>(rightToLeft);
+    }
+    if (!nullToAbsent || publisher != null) {
+      map['publisher'] = Variable<String>(publisher);
     }
     if (!nullToAbsent || pageSizes != null) {
       map['page_sizes'] = Variable<String>(pageSizes);
@@ -556,6 +583,9 @@ class Book extends DataClass implements Insertable<Book> {
       rightToLeft: rightToLeft == null && nullToAbsent
           ? const Value.absent()
           : Value(rightToLeft),
+      publisher: publisher == null && nullToAbsent
+          ? const Value.absent()
+          : Value(publisher),
       pageSizes: pageSizes == null && nullToAbsent
           ? const Value.absent()
           : Value(pageSizes),
@@ -591,6 +621,7 @@ class Book extends DataClass implements Insertable<Book> {
       artist: serializer.fromJson<String?>(json['artist']),
       summary: serializer.fromJson<String?>(json['summary']),
       rightToLeft: serializer.fromJson<bool?>(json['rightToLeft']),
+      publisher: serializer.fromJson<String?>(json['publisher']),
       pageSizes: serializer.fromJson<String?>(json['pageSizes']),
       fitMode: serializer.fromJson<String?>(json['fitMode']),
       layoutMode: serializer.fromJson<String?>(json['layoutMode']),
@@ -615,6 +646,7 @@ class Book extends DataClass implements Insertable<Book> {
       'artist': serializer.toJson<String?>(artist),
       'summary': serializer.toJson<String?>(summary),
       'rightToLeft': serializer.toJson<bool?>(rightToLeft),
+      'publisher': serializer.toJson<String?>(publisher),
       'pageSizes': serializer.toJson<String?>(pageSizes),
       'fitMode': serializer.toJson<String?>(fitMode),
       'layoutMode': serializer.toJson<String?>(layoutMode),
@@ -637,6 +669,7 @@ class Book extends DataClass implements Insertable<Book> {
     Value<String?> artist = const Value.absent(),
     Value<String?> summary = const Value.absent(),
     Value<bool?> rightToLeft = const Value.absent(),
+    Value<String?> publisher = const Value.absent(),
     Value<String?> pageSizes = const Value.absent(),
     Value<String?> fitMode = const Value.absent(),
     Value<String?> layoutMode = const Value.absent(),
@@ -656,6 +689,7 @@ class Book extends DataClass implements Insertable<Book> {
     artist: artist.present ? artist.value : this.artist,
     summary: summary.present ? summary.value : this.summary,
     rightToLeft: rightToLeft.present ? rightToLeft.value : this.rightToLeft,
+    publisher: publisher.present ? publisher.value : this.publisher,
     pageSizes: pageSizes.present ? pageSizes.value : this.pageSizes,
     fitMode: fitMode.present ? fitMode.value : this.fitMode,
     layoutMode: layoutMode.present ? layoutMode.value : this.layoutMode,
@@ -683,6 +717,7 @@ class Book extends DataClass implements Insertable<Book> {
       rightToLeft: data.rightToLeft.present
           ? data.rightToLeft.value
           : this.rightToLeft,
+      publisher: data.publisher.present ? data.publisher.value : this.publisher,
       pageSizes: data.pageSizes.present ? data.pageSizes.value : this.pageSizes,
       fitMode: data.fitMode.present ? data.fitMode.value : this.fitMode,
       layoutMode: data.layoutMode.present
@@ -711,6 +746,7 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('artist: $artist, ')
           ..write('summary: $summary, ')
           ..write('rightToLeft: $rightToLeft, ')
+          ..write('publisher: $publisher, ')
           ..write('pageSizes: $pageSizes, ')
           ..write('fitMode: $fitMode, ')
           ..write('layoutMode: $layoutMode, ')
@@ -735,6 +771,7 @@ class Book extends DataClass implements Insertable<Book> {
     artist,
     summary,
     rightToLeft,
+    publisher,
     pageSizes,
     fitMode,
     layoutMode,
@@ -758,6 +795,7 @@ class Book extends DataClass implements Insertable<Book> {
           other.artist == this.artist &&
           other.summary == this.summary &&
           other.rightToLeft == this.rightToLeft &&
+          other.publisher == this.publisher &&
           other.pageSizes == this.pageSizes &&
           other.fitMode == this.fitMode &&
           other.layoutMode == this.layoutMode &&
@@ -779,6 +817,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<String?> artist;
   final Value<String?> summary;
   final Value<bool?> rightToLeft;
+  final Value<String?> publisher;
   final Value<String?> pageSizes;
   final Value<String?> fitMode;
   final Value<String?> layoutMode;
@@ -799,6 +838,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.artist = const Value.absent(),
     this.summary = const Value.absent(),
     this.rightToLeft = const Value.absent(),
+    this.publisher = const Value.absent(),
     this.pageSizes = const Value.absent(),
     this.fitMode = const Value.absent(),
     this.layoutMode = const Value.absent(),
@@ -820,6 +860,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.artist = const Value.absent(),
     this.summary = const Value.absent(),
     this.rightToLeft = const Value.absent(),
+    this.publisher = const Value.absent(),
     this.pageSizes = const Value.absent(),
     this.fitMode = const Value.absent(),
     this.layoutMode = const Value.absent(),
@@ -845,6 +886,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<String>? artist,
     Expression<String>? summary,
     Expression<bool>? rightToLeft,
+    Expression<String>? publisher,
     Expression<String>? pageSizes,
     Expression<String>? fitMode,
     Expression<String>? layoutMode,
@@ -866,6 +908,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (artist != null) 'artist': artist,
       if (summary != null) 'summary': summary,
       if (rightToLeft != null) 'right_to_left': rightToLeft,
+      if (publisher != null) 'publisher': publisher,
       if (pageSizes != null) 'page_sizes': pageSizes,
       if (fitMode != null) 'fit_mode': fitMode,
       if (layoutMode != null) 'layout_mode': layoutMode,
@@ -889,6 +932,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<String?>? artist,
     Value<String?>? summary,
     Value<bool?>? rightToLeft,
+    Value<String?>? publisher,
     Value<String?>? pageSizes,
     Value<String?>? fitMode,
     Value<String?>? layoutMode,
@@ -910,6 +954,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       artist: artist ?? this.artist,
       summary: summary ?? this.summary,
       rightToLeft: rightToLeft ?? this.rightToLeft,
+      publisher: publisher ?? this.publisher,
       pageSizes: pageSizes ?? this.pageSizes,
       fitMode: fitMode ?? this.fitMode,
       layoutMode: layoutMode ?? this.layoutMode,
@@ -963,6 +1008,9 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (rightToLeft.present) {
       map['right_to_left'] = Variable<bool>(rightToLeft.value);
     }
+    if (publisher.present) {
+      map['publisher'] = Variable<String>(publisher.value);
+    }
     if (pageSizes.present) {
       map['page_sizes'] = Variable<String>(pageSizes.value);
     }
@@ -998,6 +1046,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('artist: $artist, ')
           ..write('summary: $summary, ')
           ..write('rightToLeft: $rightToLeft, ')
+          ..write('publisher: $publisher, ')
           ..write('pageSizes: $pageSizes, ')
           ..write('fitMode: $fitMode, ')
           ..write('layoutMode: $layoutMode, ')
@@ -1213,16 +1262,1122 @@ class SettingsCompanion extends UpdateCompanion<Setting> {
   }
 }
 
+class $LibraryRootsTable extends LibraryRoots
+    with TableInfo<$LibraryRootsTable, LibraryRoot> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LibraryRootsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _locationMeta = const VerificationMeta(
+    'location',
+  );
+  @override
+  late final GeneratedColumn<String> location = GeneratedColumn<String>(
+    'location',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, location, name];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'library_roots';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LibraryRoot> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('location')) {
+      context.handle(
+        _locationMeta,
+        location.isAcceptableOrUnknown(data['location']!, _locationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_locationMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LibraryRoot map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LibraryRoot(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      location: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+    );
+  }
+
+  @override
+  $LibraryRootsTable createAlias(String alias) {
+    return $LibraryRootsTable(attachedDatabase, alias);
+  }
+}
+
+class LibraryRoot extends DataClass implements Insertable<LibraryRoot> {
+  final int id;
+  final String location;
+  final String name;
+  const LibraryRoot({
+    required this.id,
+    required this.location,
+    required this.name,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['location'] = Variable<String>(location);
+    map['name'] = Variable<String>(name);
+    return map;
+  }
+
+  LibraryRootsCompanion toCompanion(bool nullToAbsent) {
+    return LibraryRootsCompanion(
+      id: Value(id),
+      location: Value(location),
+      name: Value(name),
+    );
+  }
+
+  factory LibraryRoot.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LibraryRoot(
+      id: serializer.fromJson<int>(json['id']),
+      location: serializer.fromJson<String>(json['location']),
+      name: serializer.fromJson<String>(json['name']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'location': serializer.toJson<String>(location),
+      'name': serializer.toJson<String>(name),
+    };
+  }
+
+  LibraryRoot copyWith({int? id, String? location, String? name}) =>
+      LibraryRoot(
+        id: id ?? this.id,
+        location: location ?? this.location,
+        name: name ?? this.name,
+      );
+  LibraryRoot copyWithCompanion(LibraryRootsCompanion data) {
+    return LibraryRoot(
+      id: data.id.present ? data.id.value : this.id,
+      location: data.location.present ? data.location.value : this.location,
+      name: data.name.present ? data.name.value : this.name,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LibraryRoot(')
+          ..write('id: $id, ')
+          ..write('location: $location, ')
+          ..write('name: $name')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, location, name);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LibraryRoot &&
+          other.id == this.id &&
+          other.location == this.location &&
+          other.name == this.name);
+}
+
+class LibraryRootsCompanion extends UpdateCompanion<LibraryRoot> {
+  final Value<int> id;
+  final Value<String> location;
+  final Value<String> name;
+  const LibraryRootsCompanion({
+    this.id = const Value.absent(),
+    this.location = const Value.absent(),
+    this.name = const Value.absent(),
+  });
+  LibraryRootsCompanion.insert({
+    this.id = const Value.absent(),
+    required String location,
+    required String name,
+  }) : location = Value(location),
+       name = Value(name);
+  static Insertable<LibraryRoot> custom({
+    Expression<int>? id,
+    Expression<String>? location,
+    Expression<String>? name,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (location != null) 'location': location,
+      if (name != null) 'name': name,
+    });
+  }
+
+  LibraryRootsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? location,
+    Value<String>? name,
+  }) {
+    return LibraryRootsCompanion(
+      id: id ?? this.id,
+      location: location ?? this.location,
+      name: name ?? this.name,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (location.present) {
+      map['location'] = Variable<String>(location.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LibraryRootsCompanion(')
+          ..write('id: $id, ')
+          ..write('location: $location, ')
+          ..write('name: $name')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $LibraryEntriesTable extends LibraryEntries
+    with TableInfo<$LibraryEntriesTable, LibraryEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LibraryEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _locationMeta = const VerificationMeta(
+    'location',
+  );
+  @override
+  late final GeneratedColumn<String> location = GeneratedColumn<String>(
+    'location',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rootIdMeta = const VerificationMeta('rootId');
+  @override
+  late final GeneratedColumn<int> rootId = GeneratedColumn<int>(
+    'root_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _folderMeta = const VerificationMeta('folder');
+  @override
+  late final GeneratedColumn<String> folder = GeneratedColumn<String>(
+    'folder',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fileNameMeta = const VerificationMeta(
+    'fileName',
+  );
+  @override
+  late final GeneratedColumn<String> fileName = GeneratedColumn<String>(
+    'file_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sizeMeta = const VerificationMeta('size');
+  @override
+  late final GeneratedColumn<int> size = GeneratedColumn<int>(
+    'size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modifiedMeta = const VerificationMeta(
+    'modified',
+  );
+  @override
+  late final GeneratedColumn<int> modified = GeneratedColumn<int>(
+    'modified',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<String> bookId = GeneratedColumn<String>(
+    'book_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pageCountMeta = const VerificationMeta(
+    'pageCount',
+  );
+  @override
+  late final GeneratedColumn<int> pageCount = GeneratedColumn<int>(
+    'page_count',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _seriesMeta = const VerificationMeta('series');
+  @override
+  late final GeneratedColumn<String> series = GeneratedColumn<String>(
+    'series',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _numberMeta = const VerificationMeta('number');
+  @override
+  late final GeneratedColumn<String> number = GeneratedColumn<String>(
+    'number',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _volumeMeta = const VerificationMeta('volume');
+  @override
+  late final GeneratedColumn<int> volume = GeneratedColumn<int>(
+    'volume',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _yearMeta = const VerificationMeta('year');
+  @override
+  late final GeneratedColumn<int> year = GeneratedColumn<int>(
+    'year',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _publisherMeta = const VerificationMeta(
+    'publisher',
+  );
+  @override
+  late final GeneratedColumn<String> publisher = GeneratedColumn<String>(
+    'publisher',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _errorMeta = const VerificationMeta('error');
+  @override
+  late final GeneratedColumn<String> error = GeneratedColumn<String>(
+    'error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    location,
+    rootId,
+    folder,
+    fileName,
+    size,
+    modified,
+    bookId,
+    pageCount,
+    series,
+    number,
+    volume,
+    year,
+    publisher,
+    title,
+    error,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'library_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LibraryEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('location')) {
+      context.handle(
+        _locationMeta,
+        location.isAcceptableOrUnknown(data['location']!, _locationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_locationMeta);
+    }
+    if (data.containsKey('root_id')) {
+      context.handle(
+        _rootIdMeta,
+        rootId.isAcceptableOrUnknown(data['root_id']!, _rootIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rootIdMeta);
+    }
+    if (data.containsKey('folder')) {
+      context.handle(
+        _folderMeta,
+        folder.isAcceptableOrUnknown(data['folder']!, _folderMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_folderMeta);
+    }
+    if (data.containsKey('file_name')) {
+      context.handle(
+        _fileNameMeta,
+        fileName.isAcceptableOrUnknown(data['file_name']!, _fileNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fileNameMeta);
+    }
+    if (data.containsKey('size')) {
+      context.handle(
+        _sizeMeta,
+        size.isAcceptableOrUnknown(data['size']!, _sizeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sizeMeta);
+    }
+    if (data.containsKey('modified')) {
+      context.handle(
+        _modifiedMeta,
+        modified.isAcceptableOrUnknown(data['modified']!, _modifiedMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modifiedMeta);
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    }
+    if (data.containsKey('page_count')) {
+      context.handle(
+        _pageCountMeta,
+        pageCount.isAcceptableOrUnknown(data['page_count']!, _pageCountMeta),
+      );
+    }
+    if (data.containsKey('series')) {
+      context.handle(
+        _seriesMeta,
+        series.isAcceptableOrUnknown(data['series']!, _seriesMeta),
+      );
+    }
+    if (data.containsKey('number')) {
+      context.handle(
+        _numberMeta,
+        number.isAcceptableOrUnknown(data['number']!, _numberMeta),
+      );
+    }
+    if (data.containsKey('volume')) {
+      context.handle(
+        _volumeMeta,
+        volume.isAcceptableOrUnknown(data['volume']!, _volumeMeta),
+      );
+    }
+    if (data.containsKey('year')) {
+      context.handle(
+        _yearMeta,
+        year.isAcceptableOrUnknown(data['year']!, _yearMeta),
+      );
+    }
+    if (data.containsKey('publisher')) {
+      context.handle(
+        _publisherMeta,
+        publisher.isAcceptableOrUnknown(data['publisher']!, _publisherMeta),
+      );
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    }
+    if (data.containsKey('error')) {
+      context.handle(
+        _errorMeta,
+        error.isAcceptableOrUnknown(data['error']!, _errorMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {location};
+  @override
+  LibraryEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LibraryEntry(
+      location: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location'],
+      )!,
+      rootId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}root_id'],
+      )!,
+      folder: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}folder'],
+      )!,
+      fileName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_name'],
+      )!,
+      size: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size'],
+      )!,
+      modified: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}modified'],
+      )!,
+      bookId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}book_id'],
+      ),
+      pageCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}page_count'],
+      ),
+      series: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}series'],
+      ),
+      number: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}number'],
+      ),
+      volume: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}volume'],
+      ),
+      year: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}year'],
+      ),
+      publisher: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}publisher'],
+      ),
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      ),
+      error: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error'],
+      ),
+    );
+  }
+
+  @override
+  $LibraryEntriesTable createAlias(String alias) {
+    return $LibraryEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class LibraryEntry extends DataClass implements Insertable<LibraryEntry> {
+  /// File path, or on Android the document URI.
+  final String location;
+  final int rootId;
+
+  /// Folder inside the root, `/`-separated; empty at the root itself.
+  final String folder;
+  final String fileName;
+  final int size;
+
+  /// Modification time, ms since the epoch (0 if unknown).
+  final int modified;
+
+  /// The book's [Books.id] (content fingerprint), once scanned.
+  final String? bookId;
+  final int? pageCount;
+  final String? series;
+  final String? number;
+  final int? volume;
+  final int? year;
+  final String? publisher;
+  final String? title;
+
+  /// Why the last scan couldn't read this file, if it couldn't.
+  final String? error;
+  const LibraryEntry({
+    required this.location,
+    required this.rootId,
+    required this.folder,
+    required this.fileName,
+    required this.size,
+    required this.modified,
+    this.bookId,
+    this.pageCount,
+    this.series,
+    this.number,
+    this.volume,
+    this.year,
+    this.publisher,
+    this.title,
+    this.error,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['location'] = Variable<String>(location);
+    map['root_id'] = Variable<int>(rootId);
+    map['folder'] = Variable<String>(folder);
+    map['file_name'] = Variable<String>(fileName);
+    map['size'] = Variable<int>(size);
+    map['modified'] = Variable<int>(modified);
+    if (!nullToAbsent || bookId != null) {
+      map['book_id'] = Variable<String>(bookId);
+    }
+    if (!nullToAbsent || pageCount != null) {
+      map['page_count'] = Variable<int>(pageCount);
+    }
+    if (!nullToAbsent || series != null) {
+      map['series'] = Variable<String>(series);
+    }
+    if (!nullToAbsent || number != null) {
+      map['number'] = Variable<String>(number);
+    }
+    if (!nullToAbsent || volume != null) {
+      map['volume'] = Variable<int>(volume);
+    }
+    if (!nullToAbsent || year != null) {
+      map['year'] = Variable<int>(year);
+    }
+    if (!nullToAbsent || publisher != null) {
+      map['publisher'] = Variable<String>(publisher);
+    }
+    if (!nullToAbsent || title != null) {
+      map['title'] = Variable<String>(title);
+    }
+    if (!nullToAbsent || error != null) {
+      map['error'] = Variable<String>(error);
+    }
+    return map;
+  }
+
+  LibraryEntriesCompanion toCompanion(bool nullToAbsent) {
+    return LibraryEntriesCompanion(
+      location: Value(location),
+      rootId: Value(rootId),
+      folder: Value(folder),
+      fileName: Value(fileName),
+      size: Value(size),
+      modified: Value(modified),
+      bookId: bookId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bookId),
+      pageCount: pageCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pageCount),
+      series: series == null && nullToAbsent
+          ? const Value.absent()
+          : Value(series),
+      number: number == null && nullToAbsent
+          ? const Value.absent()
+          : Value(number),
+      volume: volume == null && nullToAbsent
+          ? const Value.absent()
+          : Value(volume),
+      year: year == null && nullToAbsent ? const Value.absent() : Value(year),
+      publisher: publisher == null && nullToAbsent
+          ? const Value.absent()
+          : Value(publisher),
+      title: title == null && nullToAbsent
+          ? const Value.absent()
+          : Value(title),
+      error: error == null && nullToAbsent
+          ? const Value.absent()
+          : Value(error),
+    );
+  }
+
+  factory LibraryEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LibraryEntry(
+      location: serializer.fromJson<String>(json['location']),
+      rootId: serializer.fromJson<int>(json['rootId']),
+      folder: serializer.fromJson<String>(json['folder']),
+      fileName: serializer.fromJson<String>(json['fileName']),
+      size: serializer.fromJson<int>(json['size']),
+      modified: serializer.fromJson<int>(json['modified']),
+      bookId: serializer.fromJson<String?>(json['bookId']),
+      pageCount: serializer.fromJson<int?>(json['pageCount']),
+      series: serializer.fromJson<String?>(json['series']),
+      number: serializer.fromJson<String?>(json['number']),
+      volume: serializer.fromJson<int?>(json['volume']),
+      year: serializer.fromJson<int?>(json['year']),
+      publisher: serializer.fromJson<String?>(json['publisher']),
+      title: serializer.fromJson<String?>(json['title']),
+      error: serializer.fromJson<String?>(json['error']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'location': serializer.toJson<String>(location),
+      'rootId': serializer.toJson<int>(rootId),
+      'folder': serializer.toJson<String>(folder),
+      'fileName': serializer.toJson<String>(fileName),
+      'size': serializer.toJson<int>(size),
+      'modified': serializer.toJson<int>(modified),
+      'bookId': serializer.toJson<String?>(bookId),
+      'pageCount': serializer.toJson<int?>(pageCount),
+      'series': serializer.toJson<String?>(series),
+      'number': serializer.toJson<String?>(number),
+      'volume': serializer.toJson<int?>(volume),
+      'year': serializer.toJson<int?>(year),
+      'publisher': serializer.toJson<String?>(publisher),
+      'title': serializer.toJson<String?>(title),
+      'error': serializer.toJson<String?>(error),
+    };
+  }
+
+  LibraryEntry copyWith({
+    String? location,
+    int? rootId,
+    String? folder,
+    String? fileName,
+    int? size,
+    int? modified,
+    Value<String?> bookId = const Value.absent(),
+    Value<int?> pageCount = const Value.absent(),
+    Value<String?> series = const Value.absent(),
+    Value<String?> number = const Value.absent(),
+    Value<int?> volume = const Value.absent(),
+    Value<int?> year = const Value.absent(),
+    Value<String?> publisher = const Value.absent(),
+    Value<String?> title = const Value.absent(),
+    Value<String?> error = const Value.absent(),
+  }) => LibraryEntry(
+    location: location ?? this.location,
+    rootId: rootId ?? this.rootId,
+    folder: folder ?? this.folder,
+    fileName: fileName ?? this.fileName,
+    size: size ?? this.size,
+    modified: modified ?? this.modified,
+    bookId: bookId.present ? bookId.value : this.bookId,
+    pageCount: pageCount.present ? pageCount.value : this.pageCount,
+    series: series.present ? series.value : this.series,
+    number: number.present ? number.value : this.number,
+    volume: volume.present ? volume.value : this.volume,
+    year: year.present ? year.value : this.year,
+    publisher: publisher.present ? publisher.value : this.publisher,
+    title: title.present ? title.value : this.title,
+    error: error.present ? error.value : this.error,
+  );
+  LibraryEntry copyWithCompanion(LibraryEntriesCompanion data) {
+    return LibraryEntry(
+      location: data.location.present ? data.location.value : this.location,
+      rootId: data.rootId.present ? data.rootId.value : this.rootId,
+      folder: data.folder.present ? data.folder.value : this.folder,
+      fileName: data.fileName.present ? data.fileName.value : this.fileName,
+      size: data.size.present ? data.size.value : this.size,
+      modified: data.modified.present ? data.modified.value : this.modified,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      pageCount: data.pageCount.present ? data.pageCount.value : this.pageCount,
+      series: data.series.present ? data.series.value : this.series,
+      number: data.number.present ? data.number.value : this.number,
+      volume: data.volume.present ? data.volume.value : this.volume,
+      year: data.year.present ? data.year.value : this.year,
+      publisher: data.publisher.present ? data.publisher.value : this.publisher,
+      title: data.title.present ? data.title.value : this.title,
+      error: data.error.present ? data.error.value : this.error,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LibraryEntry(')
+          ..write('location: $location, ')
+          ..write('rootId: $rootId, ')
+          ..write('folder: $folder, ')
+          ..write('fileName: $fileName, ')
+          ..write('size: $size, ')
+          ..write('modified: $modified, ')
+          ..write('bookId: $bookId, ')
+          ..write('pageCount: $pageCount, ')
+          ..write('series: $series, ')
+          ..write('number: $number, ')
+          ..write('volume: $volume, ')
+          ..write('year: $year, ')
+          ..write('publisher: $publisher, ')
+          ..write('title: $title, ')
+          ..write('error: $error')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    location,
+    rootId,
+    folder,
+    fileName,
+    size,
+    modified,
+    bookId,
+    pageCount,
+    series,
+    number,
+    volume,
+    year,
+    publisher,
+    title,
+    error,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LibraryEntry &&
+          other.location == this.location &&
+          other.rootId == this.rootId &&
+          other.folder == this.folder &&
+          other.fileName == this.fileName &&
+          other.size == this.size &&
+          other.modified == this.modified &&
+          other.bookId == this.bookId &&
+          other.pageCount == this.pageCount &&
+          other.series == this.series &&
+          other.number == this.number &&
+          other.volume == this.volume &&
+          other.year == this.year &&
+          other.publisher == this.publisher &&
+          other.title == this.title &&
+          other.error == this.error);
+}
+
+class LibraryEntriesCompanion extends UpdateCompanion<LibraryEntry> {
+  final Value<String> location;
+  final Value<int> rootId;
+  final Value<String> folder;
+  final Value<String> fileName;
+  final Value<int> size;
+  final Value<int> modified;
+  final Value<String?> bookId;
+  final Value<int?> pageCount;
+  final Value<String?> series;
+  final Value<String?> number;
+  final Value<int?> volume;
+  final Value<int?> year;
+  final Value<String?> publisher;
+  final Value<String?> title;
+  final Value<String?> error;
+  final Value<int> rowid;
+  const LibraryEntriesCompanion({
+    this.location = const Value.absent(),
+    this.rootId = const Value.absent(),
+    this.folder = const Value.absent(),
+    this.fileName = const Value.absent(),
+    this.size = const Value.absent(),
+    this.modified = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.pageCount = const Value.absent(),
+    this.series = const Value.absent(),
+    this.number = const Value.absent(),
+    this.volume = const Value.absent(),
+    this.year = const Value.absent(),
+    this.publisher = const Value.absent(),
+    this.title = const Value.absent(),
+    this.error = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LibraryEntriesCompanion.insert({
+    required String location,
+    required int rootId,
+    required String folder,
+    required String fileName,
+    required int size,
+    required int modified,
+    this.bookId = const Value.absent(),
+    this.pageCount = const Value.absent(),
+    this.series = const Value.absent(),
+    this.number = const Value.absent(),
+    this.volume = const Value.absent(),
+    this.year = const Value.absent(),
+    this.publisher = const Value.absent(),
+    this.title = const Value.absent(),
+    this.error = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : location = Value(location),
+       rootId = Value(rootId),
+       folder = Value(folder),
+       fileName = Value(fileName),
+       size = Value(size),
+       modified = Value(modified);
+  static Insertable<LibraryEntry> custom({
+    Expression<String>? location,
+    Expression<int>? rootId,
+    Expression<String>? folder,
+    Expression<String>? fileName,
+    Expression<int>? size,
+    Expression<int>? modified,
+    Expression<String>? bookId,
+    Expression<int>? pageCount,
+    Expression<String>? series,
+    Expression<String>? number,
+    Expression<int>? volume,
+    Expression<int>? year,
+    Expression<String>? publisher,
+    Expression<String>? title,
+    Expression<String>? error,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (location != null) 'location': location,
+      if (rootId != null) 'root_id': rootId,
+      if (folder != null) 'folder': folder,
+      if (fileName != null) 'file_name': fileName,
+      if (size != null) 'size': size,
+      if (modified != null) 'modified': modified,
+      if (bookId != null) 'book_id': bookId,
+      if (pageCount != null) 'page_count': pageCount,
+      if (series != null) 'series': series,
+      if (number != null) 'number': number,
+      if (volume != null) 'volume': volume,
+      if (year != null) 'year': year,
+      if (publisher != null) 'publisher': publisher,
+      if (title != null) 'title': title,
+      if (error != null) 'error': error,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LibraryEntriesCompanion copyWith({
+    Value<String>? location,
+    Value<int>? rootId,
+    Value<String>? folder,
+    Value<String>? fileName,
+    Value<int>? size,
+    Value<int>? modified,
+    Value<String?>? bookId,
+    Value<int?>? pageCount,
+    Value<String?>? series,
+    Value<String?>? number,
+    Value<int?>? volume,
+    Value<int?>? year,
+    Value<String?>? publisher,
+    Value<String?>? title,
+    Value<String?>? error,
+    Value<int>? rowid,
+  }) {
+    return LibraryEntriesCompanion(
+      location: location ?? this.location,
+      rootId: rootId ?? this.rootId,
+      folder: folder ?? this.folder,
+      fileName: fileName ?? this.fileName,
+      size: size ?? this.size,
+      modified: modified ?? this.modified,
+      bookId: bookId ?? this.bookId,
+      pageCount: pageCount ?? this.pageCount,
+      series: series ?? this.series,
+      number: number ?? this.number,
+      volume: volume ?? this.volume,
+      year: year ?? this.year,
+      publisher: publisher ?? this.publisher,
+      title: title ?? this.title,
+      error: error ?? this.error,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (location.present) {
+      map['location'] = Variable<String>(location.value);
+    }
+    if (rootId.present) {
+      map['root_id'] = Variable<int>(rootId.value);
+    }
+    if (folder.present) {
+      map['folder'] = Variable<String>(folder.value);
+    }
+    if (fileName.present) {
+      map['file_name'] = Variable<String>(fileName.value);
+    }
+    if (size.present) {
+      map['size'] = Variable<int>(size.value);
+    }
+    if (modified.present) {
+      map['modified'] = Variable<int>(modified.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<String>(bookId.value);
+    }
+    if (pageCount.present) {
+      map['page_count'] = Variable<int>(pageCount.value);
+    }
+    if (series.present) {
+      map['series'] = Variable<String>(series.value);
+    }
+    if (number.present) {
+      map['number'] = Variable<String>(number.value);
+    }
+    if (volume.present) {
+      map['volume'] = Variable<int>(volume.value);
+    }
+    if (year.present) {
+      map['year'] = Variable<int>(year.value);
+    }
+    if (publisher.present) {
+      map['publisher'] = Variable<String>(publisher.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (error.present) {
+      map['error'] = Variable<String>(error.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LibraryEntriesCompanion(')
+          ..write('location: $location, ')
+          ..write('rootId: $rootId, ')
+          ..write('folder: $folder, ')
+          ..write('fileName: $fileName, ')
+          ..write('size: $size, ')
+          ..write('modified: $modified, ')
+          ..write('bookId: $bookId, ')
+          ..write('pageCount: $pageCount, ')
+          ..write('series: $series, ')
+          ..write('number: $number, ')
+          ..write('volume: $volume, ')
+          ..write('year: $year, ')
+          ..write('publisher: $publisher, ')
+          ..write('title: $title, ')
+          ..write('error: $error, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $BooksTable books = $BooksTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
+  late final $LibraryRootsTable libraryRoots = $LibraryRootsTable(this);
+  late final $LibraryEntriesTable libraryEntries = $LibraryEntriesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [books, settings];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    books,
+    settings,
+    libraryRoots,
+    libraryEntries,
+  ];
 }
 
 typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
@@ -1240,6 +2395,7 @@ typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
   Value<String?> artist,
   Value<String?> summary,
   Value<bool?> rightToLeft,
+  Value<String?> publisher,
   Value<String?> pageSizes,
   Value<String?> fitMode,
   Value<String?> layoutMode,
@@ -1261,6 +2417,7 @@ typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
   Value<String?> artist,
   Value<String?> summary,
   Value<bool?> rightToLeft,
+  Value<String?> publisher,
   Value<String?> pageSizes,
   Value<String?> fitMode,
   Value<String?> layoutMode,
@@ -1343,6 +2500,11 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
 
   ColumnFilters<bool> get rightToLeft => $composableBuilder(
     column: $table.rightToLeft,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get publisher => $composableBuilder(
+    column: $table.publisher,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1446,6 +2608,11 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get publisher => $composableBuilder(
+    column: $table.publisher,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get pageSizes => $composableBuilder(
     column: $table.pageSizes,
     builder: (column) => ColumnOrderings(column),
@@ -1524,6 +2691,9 @@ class $$BooksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get publisher =>
+      $composableBuilder(column: $table.publisher, builder: (column) => column);
+
   GeneratedColumn<String> get pageSizes =>
       $composableBuilder(column: $table.pageSizes, builder: (column) => column);
 
@@ -1583,6 +2753,7 @@ class $$BooksTableTableManager
                 Value<String?> artist = const Value.absent(),
                 Value<String?> summary = const Value.absent(),
                 Value<bool?> rightToLeft = const Value.absent(),
+                Value<String?> publisher = const Value.absent(),
                 Value<String?> pageSizes = const Value.absent(),
                 Value<String?> fitMode = const Value.absent(),
                 Value<String?> layoutMode = const Value.absent(),
@@ -1603,6 +2774,7 @@ class $$BooksTableTableManager
                 artist: artist,
                 summary: summary,
                 rightToLeft: rightToLeft,
+                publisher: publisher,
                 pageSizes: pageSizes,
                 fitMode: fitMode,
                 layoutMode: layoutMode,
@@ -1625,6 +2797,7 @@ class $$BooksTableTableManager
                 Value<String?> artist = const Value.absent(),
                 Value<String?> summary = const Value.absent(),
                 Value<bool?> rightToLeft = const Value.absent(),
+                Value<String?> publisher = const Value.absent(),
                 Value<String?> pageSizes = const Value.absent(),
                 Value<String?> fitMode = const Value.absent(),
                 Value<String?> layoutMode = const Value.absent(),
@@ -1645,6 +2818,7 @@ class $$BooksTableTableManager
                 artist: artist,
                 summary: summary,
                 rightToLeft: rightToLeft,
+                publisher: publisher,
                 pageSizes: pageSizes,
                 fitMode: fitMode,
                 layoutMode: layoutMode,
@@ -1816,6 +2990,567 @@ typedef $$SettingsTableProcessedTableManager =
       Setting,
       PrefetchHooks Function()
     >;
+typedef $$LibraryRootsTableCreateCompanionBuilder =
+    LibraryRootsCompanion Function({
+      Value<int> id,
+      required String location,
+      required String name,
+    });
+typedef $$LibraryRootsTableUpdateCompanionBuilder =
+    LibraryRootsCompanion Function({
+      Value<int> id,
+      Value<String> location,
+      Value<String> name,
+    });
+
+class $$LibraryRootsTableFilterComposer
+    extends Composer<_$AppDatabase, $LibraryRootsTable> {
+  $$LibraryRootsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LibraryRootsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LibraryRootsTable> {
+  $$LibraryRootsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LibraryRootsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LibraryRootsTable> {
+  $$LibraryRootsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get location =>
+      $composableBuilder(column: $table.location, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+}
+
+class $$LibraryRootsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LibraryRootsTable,
+          LibraryRoot,
+          $$LibraryRootsTableFilterComposer,
+          $$LibraryRootsTableOrderingComposer,
+          $$LibraryRootsTableAnnotationComposer,
+          $$LibraryRootsTableCreateCompanionBuilder,
+          $$LibraryRootsTableUpdateCompanionBuilder,
+          (
+            LibraryRoot,
+            BaseReferences<_$AppDatabase, $LibraryRootsTable, LibraryRoot>,
+          ),
+          LibraryRoot,
+          PrefetchHooks Function()
+        > {
+  $$LibraryRootsTableTableManager(_$AppDatabase db, $LibraryRootsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LibraryRootsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LibraryRootsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LibraryRootsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> location = const Value.absent(),
+            Value<String> name = const Value.absent(),
+          }) => LibraryRootsCompanion(id: id, location: location, name: name),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String location,
+                required String name,
+              }) => LibraryRootsCompanion.insert(
+                id: id,
+                location: location,
+                name: name,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$LibraryRootsTable, LibraryRoot>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $LibraryRootsTable,
+                    LibraryRoot
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LibraryRootsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LibraryRootsTable,
+      LibraryRoot,
+      $$LibraryRootsTableFilterComposer,
+      $$LibraryRootsTableOrderingComposer,
+      $$LibraryRootsTableAnnotationComposer,
+      $$LibraryRootsTableCreateCompanionBuilder,
+      $$LibraryRootsTableUpdateCompanionBuilder,
+      (
+        LibraryRoot,
+        BaseReferences<_$AppDatabase, $LibraryRootsTable, LibraryRoot>,
+      ),
+      LibraryRoot,
+      PrefetchHooks Function()
+    >;
+typedef $$LibraryEntriesTableCreateCompanionBuilder =
+    LibraryEntriesCompanion Function({
+      required String location,
+      required int rootId,
+      required String folder,
+      required String fileName,
+      required int size,
+      required int modified,
+      Value<String?> bookId,
+      Value<int?> pageCount,
+      Value<String?> series,
+      Value<String?> number,
+      Value<int?> volume,
+      Value<int?> year,
+      Value<String?> publisher,
+      Value<String?> title,
+      Value<String?> error,
+      Value<int> rowid,
+    });
+typedef $$LibraryEntriesTableUpdateCompanionBuilder =
+    LibraryEntriesCompanion Function({
+      Value<String> location,
+      Value<int> rootId,
+      Value<String> folder,
+      Value<String> fileName,
+      Value<int> size,
+      Value<int> modified,
+      Value<String?> bookId,
+      Value<int?> pageCount,
+      Value<String?> series,
+      Value<String?> number,
+      Value<int?> volume,
+      Value<int?> year,
+      Value<String?> publisher,
+      Value<String?> title,
+      Value<String?> error,
+      Value<int> rowid,
+    });
+
+class $$LibraryEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $LibraryEntriesTable> {
+  $$LibraryEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get rootId => $composableBuilder(
+    column: $table.rootId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get folder => $composableBuilder(
+    column: $table.folder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get size => $composableBuilder(
+    column: $table.size,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get modified => $composableBuilder(
+    column: $table.modified,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get pageCount => $composableBuilder(
+    column: $table.pageCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get volume => $composableBuilder(
+    column: $table.volume,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get year => $composableBuilder(
+    column: $table.year,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get publisher => $composableBuilder(
+    column: $table.publisher,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get error => $composableBuilder(
+    column: $table.error,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LibraryEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $LibraryEntriesTable> {
+  $$LibraryEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get rootId => $composableBuilder(
+    column: $table.rootId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get folder => $composableBuilder(
+    column: $table.folder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fileName => $composableBuilder(
+    column: $table.fileName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get size => $composableBuilder(
+    column: $table.size,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get modified => $composableBuilder(
+    column: $table.modified,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bookId => $composableBuilder(
+    column: $table.bookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get pageCount => $composableBuilder(
+    column: $table.pageCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get series => $composableBuilder(
+    column: $table.series,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get number => $composableBuilder(
+    column: $table.number,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get volume => $composableBuilder(
+    column: $table.volume,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get year => $composableBuilder(
+    column: $table.year,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get publisher => $composableBuilder(
+    column: $table.publisher,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get error => $composableBuilder(
+    column: $table.error,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LibraryEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LibraryEntriesTable> {
+  $$LibraryEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get location =>
+      $composableBuilder(column: $table.location, builder: (column) => column);
+
+  GeneratedColumn<int> get rootId =>
+      $composableBuilder(column: $table.rootId, builder: (column) => column);
+
+  GeneratedColumn<String> get folder =>
+      $composableBuilder(column: $table.folder, builder: (column) => column);
+
+  GeneratedColumn<String> get fileName =>
+      $composableBuilder(column: $table.fileName, builder: (column) => column);
+
+  GeneratedColumn<int> get size =>
+      $composableBuilder(column: $table.size, builder: (column) => column);
+
+  GeneratedColumn<int> get modified =>
+      $composableBuilder(column: $table.modified, builder: (column) => column);
+
+  GeneratedColumn<String> get bookId =>
+      $composableBuilder(column: $table.bookId, builder: (column) => column);
+
+  GeneratedColumn<int> get pageCount =>
+      $composableBuilder(column: $table.pageCount, builder: (column) => column);
+
+  GeneratedColumn<String> get series =>
+      $composableBuilder(column: $table.series, builder: (column) => column);
+
+  GeneratedColumn<String> get number =>
+      $composableBuilder(column: $table.number, builder: (column) => column);
+
+  GeneratedColumn<int> get volume =>
+      $composableBuilder(column: $table.volume, builder: (column) => column);
+
+  GeneratedColumn<int> get year =>
+      $composableBuilder(column: $table.year, builder: (column) => column);
+
+  GeneratedColumn<String> get publisher =>
+      $composableBuilder(column: $table.publisher, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get error =>
+      $composableBuilder(column: $table.error, builder: (column) => column);
+}
+
+class $$LibraryEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LibraryEntriesTable,
+          LibraryEntry,
+          $$LibraryEntriesTableFilterComposer,
+          $$LibraryEntriesTableOrderingComposer,
+          $$LibraryEntriesTableAnnotationComposer,
+          $$LibraryEntriesTableCreateCompanionBuilder,
+          $$LibraryEntriesTableUpdateCompanionBuilder,
+          (
+            LibraryEntry,
+            BaseReferences<_$AppDatabase, $LibraryEntriesTable, LibraryEntry>,
+          ),
+          LibraryEntry,
+          PrefetchHooks Function()
+        > {
+  $$LibraryEntriesTableTableManager(
+    _$AppDatabase db,
+    $LibraryEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LibraryEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LibraryEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LibraryEntriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> location = const Value.absent(),
+                Value<int> rootId = const Value.absent(),
+                Value<String> folder = const Value.absent(),
+                Value<String> fileName = const Value.absent(),
+                Value<int> size = const Value.absent(),
+                Value<int> modified = const Value.absent(),
+                Value<String?> bookId = const Value.absent(),
+                Value<int?> pageCount = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<String?> number = const Value.absent(),
+                Value<int?> volume = const Value.absent(),
+                Value<int?> year = const Value.absent(),
+                Value<String?> publisher = const Value.absent(),
+                Value<String?> title = const Value.absent(),
+                Value<String?> error = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LibraryEntriesCompanion(
+                location: location,
+                rootId: rootId,
+                folder: folder,
+                fileName: fileName,
+                size: size,
+                modified: modified,
+                bookId: bookId,
+                pageCount: pageCount,
+                series: series,
+                number: number,
+                volume: volume,
+                year: year,
+                publisher: publisher,
+                title: title,
+                error: error,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String location,
+                required int rootId,
+                required String folder,
+                required String fileName,
+                required int size,
+                required int modified,
+                Value<String?> bookId = const Value.absent(),
+                Value<int?> pageCount = const Value.absent(),
+                Value<String?> series = const Value.absent(),
+                Value<String?> number = const Value.absent(),
+                Value<int?> volume = const Value.absent(),
+                Value<int?> year = const Value.absent(),
+                Value<String?> publisher = const Value.absent(),
+                Value<String?> title = const Value.absent(),
+                Value<String?> error = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LibraryEntriesCompanion.insert(
+                location: location,
+                rootId: rootId,
+                folder: folder,
+                fileName: fileName,
+                size: size,
+                modified: modified,
+                bookId: bookId,
+                pageCount: pageCount,
+                series: series,
+                number: number,
+                volume: volume,
+                year: year,
+                publisher: publisher,
+                title: title,
+                error: error,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$LibraryEntriesTable, LibraryEntry>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $LibraryEntriesTable,
+                    LibraryEntry
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LibraryEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LibraryEntriesTable,
+      LibraryEntry,
+      $$LibraryEntriesTableFilterComposer,
+      $$LibraryEntriesTableOrderingComposer,
+      $$LibraryEntriesTableAnnotationComposer,
+      $$LibraryEntriesTableCreateCompanionBuilder,
+      $$LibraryEntriesTableUpdateCompanionBuilder,
+      (
+        LibraryEntry,
+        BaseReferences<_$AppDatabase, $LibraryEntriesTable, LibraryEntry>,
+      ),
+      LibraryEntry,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1824,4 +3559,8 @@ class $AppDatabaseManager {
       $$BooksTableTableManager(_db, _db.books);
   $$SettingsTableTableManager get settings =>
       $$SettingsTableTableManager(_db, _db.settings);
+  $$LibraryRootsTableTableManager get libraryRoots =>
+      $$LibraryRootsTableTableManager(_db, _db.libraryRoots);
+  $$LibraryEntriesTableTableManager get libraryEntries =>
+      $$LibraryEntriesTableTableManager(_db, _db.libraryEntries);
 }

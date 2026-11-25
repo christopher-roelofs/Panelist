@@ -11,6 +11,7 @@ class ComicInfo {
     this.year,
     this.writer,
     this.artist,
+    this.publisher,
     this.summary,
     this.rightToLeft,
   });
@@ -24,6 +25,7 @@ class ComicInfo {
 
   /// Penciller (or Artist / CoverArtist as fallbacks).
   final String? artist;
+  final String? publisher;
   final String? summary;
 
   /// From `<Manga>`: true for `YesAndRightToLeft`, false for `No`, null if
@@ -66,6 +68,7 @@ class ComicInfo {
       year: integer('Year'),
       writer: text('Writer'),
       artist: text('Penciller') ?? text('Artist') ?? text('CoverArtist'),
+      publisher: text('Publisher'),
       summary: text('Summary'),
       rightToLeft: switch (text('Manga')) {
         'YesAndRightToLeft' => true,

@@ -13,6 +13,7 @@ void main() {
   <Year>1952</Year>
   <Writer>Unknown</Writer>
   <Penciller>Lou Cameron</Penciller>
+  <Publisher>Avon</Publisher>
   <Summary>  Cities fall.  </Summary>
   <Manga>YesAndRightToLeft</Manga>
   <Pages><Page Image="0" Type="FrontCover"/></Pages>
@@ -23,6 +24,7 @@ void main() {
     expect(info.volume, 1952);
     expect(info.year, 1952);
     expect(info.artist, 'Lou Cameron');
+    expect(info.publisher, 'Avon');
     expect(info.summary, 'Cities fall.');
     expect(info.rightToLeft, isTrue);
   });

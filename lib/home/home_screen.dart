@@ -14,6 +14,10 @@ import '../core/sources/open_source.dart';
 import '../core/sources/page_source.dart';
 import '../data/book_extensions.dart';
 import '../data/database.dart';
+import '../library/library_providers.dart';
+import '../library/library_scanner.dart';
+import '../library/library_settings_screen.dart';
+import '../library/library_view.dart';
 import '../platform/android_documents.dart';
 import '../reader/reader_screen.dart';
 
@@ -127,8 +131,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Pick up comics added or changed since the last run.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(ref.read(libraryScanProvider.notifier).scan());
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final recents = ref.watch(recentBooksProvider).value ?? const <Book>[];
+    final unfinished = [
+      for (final b in recents)
+        if (b.currentPage < b.pageCount - 1) b,
+    ];
+    final hasLibrary =
+        ref.watch(libraryRootsProvider).value?.isNotEmpty ?? false;
+    final scan = ref.watch(libraryScanProvider);
     final scheme = Theme.of(context).colorScheme;
 
     return DropTarget(
@@ -143,7 +163,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Panelist'),
+          bottom: scan.running
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(3),
+                  child: LinearProgressIndicator(
+                    minHeight: 3,
+                    value: scan.total == 0 ? null : scan.done / scan.total,
+                  ),
+                )
+              : null,
           actions: [
+            if (hasLibrary)
+              IconButton(
+                tooltip: scan.running
+                    ? 'Scanning (${scan.done} of ${scan.total})'
+                    : 'Rescan library',
+                icon: const Icon(Icons.refresh),
+                onPressed: () => ref.read(libraryScanProvider.notifier).scan(),
+              ),
             IconButton(
               tooltip: 'Open file',
               icon: const Icon(Icons.file_open_outlined),
@@ -152,10 +189,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // Folders of images need SAF tree access on Android (later).
             if (!AndroidDocuments.isSupported)
               IconButton(
-                tooltip: 'Open folder',
+                tooltip: 'Open folder of images',
                 icon: const Icon(Icons.folder_open_outlined),
                 onPressed: _pickFolder,
               ),
+            IconButton(
+              tooltip: 'Library folders',
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const LibrarySettingsScreen(),
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
           ],
         ),
@@ -166,78 +212,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ? Border.all(color: scheme.primary, width: 3)
                 : null,
           ),
-          child: recents.isEmpty
-              ? _EmptyState(
-                  onOpenFile: _pickFile,
-                  onOpenFolder: AndroidDocuments.isSupported
-                      ? null
-                      : _pickFolder,
-                )
-              : _RecentGrid(
-                  books: recents,
-                  onOpen: _openRecent,
-                  onRemove: _forget,
+          child: LibraryBrowser(
+            onOpenFile: _pickFile,
+            leading: [
+              if (unfinished.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: _ContinueReading(
+                    books: unfinished,
+                    onOpen: _openRecent,
+                    onRemove: _forget,
+                  ),
                 ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onOpenFile, this.onOpenFolder});
-
-  final VoidCallback onOpenFile;
-  final VoidCallback? onOpenFolder;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.auto_stories, size: 72, color: theme.colorScheme.primary),
-          const SizedBox(height: 16),
-          Text(
-            'Open a comic to start reading',
-            style: theme.textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            onOpenFolder == null
-                ? 'CBZ, CBR, CB7, CBT or PDF.'
-                : 'CBZ, CBR, CB7, CBT, PDF or a folder of images. '
-                      'Or drop one here.',
-            style: theme.textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.center,
-            children: [
-              FilledButton.icon(
-                onPressed: onOpenFile,
-                icon: const Icon(Icons.file_open),
-                label: const Text('Open file'),
-              ),
-              if (onOpenFolder != null)
-                OutlinedButton.icon(
-                  onPressed: onOpenFolder,
-                  icon: const Icon(Icons.folder_open),
-                  label: const Text('Open folder'),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentGrid extends StatelessWidget {
-  const _RecentGrid({
+class _ContinueReading extends StatelessWidget {
+  const _ContinueReading({
     required this.books,
     required this.onOpen,
     required this.onRemove,
@@ -249,31 +244,30 @@ class _RecentGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          sliver: SliverToBoxAdapter(
-            child: Text(
-              'Continue reading',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+          child: Text(
+            'Continue reading',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          sliver: SliverGrid.builder(
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 170,
-              childAspectRatio: 0.52,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-            ),
+        SizedBox(
+          height: 250,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: books.length,
-            itemBuilder: (context, i) => _BookTile(
-              book: books[i],
-              onOpen: () => onOpen(books[i]),
-              onRemove: () => onRemove(books[i]),
+            separatorBuilder: (_, _) => const SizedBox(width: 14),
+            itemBuilder: (context, i) => SizedBox(
+              width: 124,
+              child: _BookTile(
+                book: books[i],
+                onOpen: () => onOpen(books[i]),
+                onRemove: () => onRemove(books[i]),
+              ),
             ),
           ),
         ),
