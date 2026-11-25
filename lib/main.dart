@@ -16,6 +16,7 @@ import 'home/home_screen.dart';
 import 'library/library_providers.dart';
 import 'library/library_scanner.dart';
 import 'platform/android_documents.dart';
+import 'reader/open_book.dart';
 
 /// `panelist [path]` opens [path] directly in the reader.
 Future<void> main(List<String> args) async {

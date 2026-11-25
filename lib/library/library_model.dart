@@ -217,3 +217,18 @@ List<LibraryComic> searchComics(Iterable<LibraryComic> comics, String query) {
     return s != 0 ? s : compareIssues(a, b);
   });
 }
+
+/// The issue after the book [bookId] in its series (by number, then year,
+/// then file name), or null if it's the last one, or not in the library.
+LibraryComic? nextInSeries(Iterable<LibraryComic> comics, String bookId) {
+  final current = comics.where((c) => c.entry.bookId == bookId).firstOrNull;
+  if (current == null) return null;
+  final series = comics.where((c) => c.series == current.series).toList()
+    ..sort(compareIssues);
+  final i = series.indexOf(current);
+  // Skip other copies of the same book (same content in two places).
+  for (final c in series.skip(i + 1)) {
+    if (c.entry.bookId != bookId) return c;
+  }
+  return null;
+}

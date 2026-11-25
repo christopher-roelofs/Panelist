@@ -96,3 +96,9 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
   come from a neutral grey scheme, so the accent never tints them; accents
   use the `fidelity` variant so similar hues stay distinguishable. The
   reader is always black.
+- End of book (`lib/reader/end_of_book.dart`): one more page after the last
+  shows "Finished" and the next issue in the series (`nextInSeries`: by
+  number, then year, then file name; other copies of the same book are
+  skipped). Reaching it saves the last page as progress, so the book counts
+  as read even when it ends on a spread. "Read #n" replaces the reader, so
+  Back returns to the library.

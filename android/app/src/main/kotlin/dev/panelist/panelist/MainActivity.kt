@@ -2,12 +2,14 @@ package dev.panelist.panelist
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
+import android.view.View
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -37,6 +39,16 @@ class MainActivity : FlutterActivity() {
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         channel.setMethodCallHandler(::onMethodCall)
         initialUri = viewedUri(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Android draws a focus outline (in the system accent colour) around
+        // the whole Flutter view once a key event arrives (keyboard, remote,
+        // adb). Flutter shows its own focus, so turn the system one off.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            findViewById<View?>(FLUTTER_VIEW_ID)?.defaultFocusHighlightEnabled = false
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

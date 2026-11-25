@@ -13,7 +13,9 @@ import '../data/book_extensions.dart';
 import '../data/database.dart';
 import '../platform/window.dart';
 import 'book_info_dialog.dart';
+import 'end_of_book.dart';
 import 'fit_mode.dart';
+import 'open_book.dart';
 import 'reader_chrome.dart';
 import 'reader_settings.dart';
 import 'spreads.dart';
@@ -66,6 +68,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   final _pageKeys = <int, GlobalKey<ZoomablePageState>>{};
 
   PageSource get _src => widget.source;
+
+  /// The end card ([EndOfBook]) is one more item after the last unit.
+  int get _endIndex => _units.length;
+  bool get _atEnd => _unit == _endIndex;
   ZoomablePageState? get _current => _pageKeys[_unit]?.currentState;
   String get _title => widget.book?.displayTitle ?? _src.title;
 
@@ -171,7 +177,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   // Navigation
 
   void _goTo(int unit, {bool animate = true}) {
-    final target = unit.clamp(0, _units.length - 1);
+    final target = unit.clamp(0, _endIndex);
     final controller = _controller;
     if (target == _unit || controller == null) return;
     if (animate && (target - _unit).abs() == 1) {
@@ -199,6 +205,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   void _onUnitChanged(int unit) {
+    if (unit == _endIndex) {
+      setState(() {
+        _unit = unit;
+        _locked = false;
+      });
+      // Reaching the end finishes the book, even if it ends on a spread.
+      unawaited(
+        ref.read(databaseProvider).saveProgress(_src.id, _src.pageCount - 1),
+      );
+      return;
+    }
     setState(() {
       _unit = unit;
       _anchorPage = _units[unit].first;
@@ -348,7 +365,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 });
               }
               _syncUnits(viewport);
-              final unit = _units[_unit];
+              final unit = _units[_atEnd ? _endIndex - 1 : _unit];
               return Stack(
                 children: [
                   GestureDetector(
@@ -360,25 +377,37 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       physics: _locked
                           ? const NeverScrollableScrollPhysics()
                           : null,
-                      itemCount: _units.length,
+                      itemCount: _units.length + 1,
                       onPageChanged: _onUnitChanged,
-                      itemBuilder: (context, u) => ZoomablePage(
-                        key: _pageKeys.putIfAbsent(u, GlobalKey.new),
-                        source: _src,
-                        pages: _units[u],
-                        fit: _settings.fit,
-                        viewport: viewport,
-                        isCurrent: u == _unit,
-                        onLockChanged: (locked) {
-                          if (u == _unit && locked != _locked) {
-                            setState(() => _locked = locked);
-                          }
-                        },
-                        onScrollPastEdge: (dir) {
-                          if (u == _unit) _goTo(_unit + dir);
-                        },
-                        onPageDrag: (_) => _PageDrag(_controller!),
-                      ),
+                      itemBuilder: (context, u) => u == _endIndex
+                          ? EndOfBook(
+                              bookId: _src.id,
+                              title: _title,
+                              onOpenNext: (next) => openInReader(
+                                context,
+                                ref,
+                                next.location,
+                                replace: true,
+                              ),
+                              onClose: () => Navigator.of(context).maybePop(),
+                            )
+                          : ZoomablePage(
+                              key: _pageKeys.putIfAbsent(u, GlobalKey.new),
+                              source: _src,
+                              pages: _units[u],
+                              fit: _settings.fit,
+                              viewport: viewport,
+                              isCurrent: u == _unit,
+                              onLockChanged: (locked) {
+                                if (u == _unit && locked != _locked) {
+                                  setState(() => _locked = locked);
+                                }
+                              },
+                              onScrollPastEdge: (dir) {
+                                if (u == _unit) _goTo(_unit + dir);
+                              },
+                              onPageDrag: (_) => _PageDrag(_controller!),
+                            ),
                     ),
                   ),
                   ReaderChrome(
@@ -386,7 +415,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                     title: _title,
                     pages: unit,
                     pageCount: _src.pageCount,
-                    unit: _unit,
+                    unit: _atEnd ? _endIndex - 1 : _unit,
                     unitCount: _units.length,
                     settings: _settings,
                     onSeek: (u) => _goTo(u, animate: false),

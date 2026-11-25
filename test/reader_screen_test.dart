@@ -10,6 +10,8 @@ import 'package:panelist/app/providers.dart';
 import 'package:panelist/core/sources/page_source.dart';
 import 'package:panelist/data/book_extensions.dart';
 import 'package:panelist/data/database.dart';
+import 'package:panelist/library/library_model.dart';
+import 'package:panelist/library/library_providers.dart';
 import 'package:panelist/reader/fit_mode.dart';
 import 'package:panelist/reader/reader_screen.dart';
 import 'package:panelist/reader/reader_settings.dart';
@@ -66,6 +68,7 @@ void main() {
     int initialPage = 0,
     ReaderSettings defaults = const ReaderSettings(layout: LayoutMode.single),
     Uint8List? bytes,
+    List<LibraryComic> library = const [],
   }) async {
     final src = _FakeSource(sizes, bytes);
     final book = (await tester.runAsync(() async {
@@ -85,6 +88,7 @@ void main() {
           readerDefaultsProvider.overrideWith(
             () => ReaderDefaultsNotifier(defaults),
           ),
+          libraryComicsProvider.overrideWithValue(library),
         ],
         child: MaterialApp(
           home: ReaderScreen(source: src, book: book, initialPage: initialPage),
@@ -119,11 +123,68 @@ void main() {
 
     await key(tester, LogicalKeyboardKey.end);
     expect(find.text('5 / 5'), findsOneWidget);
-    await key(tester, LogicalKeyboardKey.arrowRight); // clamps at end
+    await key(tester, LogicalKeyboardKey.arrowRight); // the end card
+    expect(find.text('Finished'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.arrowRight); // clamps there
+    expect(find.text('Finished'), findsOneWidget);
     expect(find.text('5 / 5'), findsOneWidget);
 
     await key(tester, LogicalKeyboardKey.home);
     expect(find.text('1 / 5'), findsOneWidget);
+  });
+
+  LibraryComic comic(String file, String? bookId, String number) =>
+      LibraryComic(
+        LibraryEntry(
+          location: '/lib/S/$file',
+          rootId: 1,
+          folder: 'S',
+          fileName: file,
+          size: 1,
+          modified: 0,
+          bookId: bookId,
+          series: 'Saga',
+          number: number,
+        ),
+        null,
+      );
+
+  testWidgets('the end card finishes the book and offers the next issue', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      // Ends on a spread, so the last page itself is never the anchor.
+      sizes: const [_portrait, _portrait, _portrait, _portrait],
+      defaults: const ReaderSettings(
+        layout: LayoutMode.double,
+        coverAlone: false,
+      ),
+      library: [
+        comic('saga1.cbz', 'fake', '1'),
+        comic('saga3.cbz', null, '3'),
+        comic('saga2.cbz', null, '2'),
+      ],
+    );
+    await key(tester, LogicalKeyboardKey.end);
+    expect((await stored(tester)).currentPage, 2);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(find.text('Finished'), findsOneWidget);
+    expect(find.text('Next in Saga'), findsOneWidget);
+    expect(find.text('Read #2'), findsOneWidget);
+    expect((await stored(tester)).currentPage, 3); // the last page: read
+
+    await key(tester, LogicalKeyboardKey.arrowLeft);
+    expect(find.text('Finished'), findsNothing);
+  });
+
+  testWidgets('the end card without a next issue', (tester) async {
+    await pump(tester, library: [comic('saga9.cbz', 'fake', '9')]);
+    await key(tester, LogicalKeyboardKey.end);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(find.text('Finished'), findsOneWidget);
+    expect(find.textContaining('Next in'), findsNothing);
+    expect(find.text('Back to library'), findsOneWidget);
   });
 
   testWidgets('edge taps turn pages without delay', (tester) async {

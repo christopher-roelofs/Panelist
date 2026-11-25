@@ -152,6 +152,18 @@ void main() {
       expect(names('nothing like this'), '');
     });
 
+    test('next in series', () {
+      String? next(String bookId) {
+        final c = nextInSeries(comics, bookId);
+        return c == null ? null : '${c.series} ${c.number}';
+      }
+
+      expect(next('lk1'), 'Locke & Key: Welcome to Lovecraft 2');
+      expect(next('lk2'), 'Locke & Key: Welcome to Lovecraft 10');
+      expect(next('lk10'), isNull); // last issue
+      expect(next('not-in-library'), isNull);
+    });
+
     test('folder contents', () {
       final (top, files) = folderContents(comics, 1, '');
       expect(top.map((f) => f.name), [

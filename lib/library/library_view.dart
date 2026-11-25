@@ -6,7 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
 import '../data/database.dart';
-import '../home/home_screen.dart' show openInReader;
+import '../reader/open_book.dart';
 import 'library_model.dart';
 import 'library_providers.dart';
 import 'library_scanner.dart';
