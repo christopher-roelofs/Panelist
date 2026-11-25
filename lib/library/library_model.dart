@@ -67,7 +67,9 @@ class LibraryComic {
   ReadState get readState {
     final pr = progress;
     if (pr == null) return ReadState.unread;
-    if (pr.currentPage >= pr.pageCount - 1) return ReadState.read;
+    if (pr.finished) return ReadState.read;
+    // Opened but still on the cover (or marked unread): not started.
+    if (pr.currentPage == 0) return ReadState.unread;
     return ReadState.reading;
   }
 
@@ -231,4 +233,25 @@ LibraryComic? nextInSeries(Iterable<LibraryComic> comics, String bookId) {
     if (c.entry.bookId != bookId) return c;
   }
   return null;
+}
+
+/// Marks [comics] read or unread. Comics not scanned yet are skipped.
+Future<void> markComics(
+  AppDatabase db,
+  Iterable<LibraryComic> comics, {
+  required bool read,
+}) {
+  final scanned = comics.where(
+    (c) => c.entry.bookId != null && c.entry.pageCount != null,
+  );
+  if (!read) return db.markUnread(scanned.map((c) => c.entry.bookId!));
+  return db.markRead([
+    for (final c in scanned)
+      (
+        id: c.entry.bookId!,
+        path: c.location,
+        title: '${c.series} ${c.issueLabel}',
+        pageCount: c.entry.pageCount!,
+      ),
+  ]);
 }

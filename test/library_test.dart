@@ -47,7 +47,7 @@ void main() {
             publisher: 'IDW',
             bookId: 'lk$n',
           ),
-          n == 1 ? (currentPage: 35, pageCount: 36) : null,
+          n == 1 ? (currentPage: 35, pageCount: 36, finished: true) : null,
         ),
       LibraryComic(
         entry(
@@ -81,6 +81,7 @@ void main() {
       LibraryComic(entry('', 'Atomic_War_001.cbr'), (
         currentPage: 3,
         pageCount: 36,
+        finished: false,
       )),
       LibraryComic(entry('Untagged Series (1999)', 'whatever 03.cbz'), null),
     ];
@@ -304,5 +305,66 @@ void main() {
       await db.removeRoot(1);
       expect(await db.entriesOf(1), isEmpty);
     });
+  });
+
+  test('mark read and unread', () async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    LibraryComic comic(String id, {int? pages = 10}) => LibraryComic(
+      LibraryEntry(
+        location: '/lib/$id.cbz',
+        rootId: 1,
+        folder: '',
+        fileName: '$id.cbz',
+        size: 1,
+        modified: 0,
+        bookId: id,
+        pageCount: pages,
+        series: 'S',
+        number: id,
+      ),
+      null,
+    );
+    // One opened book, part read, with its own page count kept.
+    await db.recordOpened(id: '2', path: '/x/2.cbz', title: 'x', pageCount: 12);
+    await db.saveProgress('2', 3);
+
+    await markComics(db, [
+      comic('1'),
+      comic('2'),
+      comic('3', pages: null), // not scanned yet: skipped
+    ], read: true);
+    var progress = await db.watchProgress().first;
+    // Read, keeping their place.
+    expect(progress['1'], (currentPage: 0, pageCount: 10, finished: true));
+    expect(progress['2'], (currentPage: 3, pageCount: 12, finished: true));
+    expect(progress.containsKey('3'), isFalse);
+    // Books marked read without opening them aren't recent.
+    expect((await db.watchRecent().first).map((b) => b.id), ['2']);
+
+    // Paging back in a read book doesn't unread it.
+    await db.saveProgress('2', 1);
+    expect((await db.watchProgress().first)['2']!.finished, isTrue);
+
+    await db.saveBookSettings(
+      '2',
+      fitMode: 'width',
+      layoutMode: 'single',
+      coverAlone: true,
+    );
+    await markComics(db, [comic('1'), comic('2')], read: false);
+    progress = await db.watchProgress().first;
+    expect(progress['2'], (currentPage: 0, pageCount: 12, finished: false));
+    expect(
+      LibraryComic(comic('2').entry, progress['2']).readState,
+      ReadState.unread,
+    );
+    // Settings survive; the book leaves recent books.
+    expect((await db.book('2'))!.fitMode, 'width');
+    expect(await db.watchRecent().first, isEmpty);
+
+    // Reaching the last page finishes it again.
+    await db.saveProgress('2', 11);
+    expect((await db.watchProgress().first)['2']!.finished, isTrue);
   });
 }

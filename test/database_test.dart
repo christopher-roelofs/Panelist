@@ -36,7 +36,7 @@ void main() {
     var recents = await db.watchRecent().first;
     expect(recents.map((b) => b.id), ['first', 'second']);
 
-    await db.forget('first');
+    await db.removeFromRecent('first');
     recents = await db.watchRecent().first;
     expect(recents.map((b) => b.id), ['second']);
   });

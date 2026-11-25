@@ -14,7 +14,7 @@ class Books extends Table {
   DateTimeColumn get lastOpened => dateTime()();
   BlobColumn get cover => blob().nullable()();
 
-  // --- v2: ComicInfo.xml metadata ---
+  // ComicInfo.xml metadata
   TextColumn get series => text().nullable()();
   TextColumn get number => text().nullable()();
   IntColumn get year => integer().nullable()();
@@ -22,14 +22,16 @@ class Books extends Table {
   TextColumn get artist => text().nullable()();
   TextColumn get summary => text().nullable()();
   BoolColumn get rightToLeft => boolean().nullable()();
-
-  // --- v3 ---
   TextColumn get publisher => text().nullable()();
 
-  // --- v2: cached page sizes, JSON `[[w,h] | null, ...]` ---
+  /// Read to the end (or marked read). Stays set when paging back or
+  /// re-reading, until the book is marked unread.
+  BoolColumn get finished => boolean().withDefault(const Constant(false))();
+
+  /// Cached page sizes, JSON `[[w,h] | null, ...]`.
   TextColumn get pageSizes => text().nullable()();
 
-  // --- v2: per-book reader settings (null = use the global default) ---
+  // Per-book reader settings (null = use the global default).
   TextColumn get fitMode => text().nullable()();
   TextColumn get layoutMode => text().nullable()();
   BoolColumn get coverAlone => boolean().nullable()();
@@ -89,7 +91,11 @@ class LibraryEntries extends Table {
 }
 
 /// Reading position of a book, without the heavier columns.
-typedef BookProgress = ({int currentPage, int pageCount});
+typedef BookProgress = ({int currentPage, int pageCount, bool finished});
+
+/// [Books.lastOpened] of a book that isn't in recent books: marked read
+/// without being opened, marked unread, or removed from recent.
+final notRecent = DateTime.fromMillisecondsSinceEpoch(0);
 
 @DriftDatabase(tables: [Books, Settings, LibraryRoots, LibraryEntries])
 class AppDatabase extends _$AppDatabase {
@@ -106,35 +112,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 3;
-
-  @override
-  MigrationStrategy get migration => MigrationStrategy(
-    onUpgrade: (m, from, to) async {
-      if (from < 2) {
-        for (final column in [
-          books.series,
-          books.number,
-          books.year,
-          books.writer,
-          books.artist,
-          books.summary,
-          books.rightToLeft,
-          books.pageSizes,
-          books.fitMode,
-          books.layoutMode,
-          books.coverAlone,
-        ]) {
-          await m.addColumn(books, column);
-        }
-      }
-      if (from < 3) {
-        await m.addColumn(books, books.publisher);
-        await m.createTable(libraryRoots);
-        await m.createTable(libraryEntries);
-      }
-    },
-  );
+  int get schemaVersion => 1;
 
   Future<Book?> book(String id) =>
       (select(books)..where((b) => b.id.equals(id))).getSingleOrNull();
@@ -168,9 +146,16 @@ class AppDatabase extends _$AppDatabase {
     return (await book(id))!;
   }
 
+  /// Saves the reading position; reaching the last page finishes the book.
   Future<void> saveProgress(String id, int page) =>
       (update(books)..where((b) => b.id.equals(id))).write(
-        BooksCompanion(currentPage: Value(page)),
+        BooksCompanion.custom(
+          currentPage: Variable(page),
+          finished:
+              books.finished |
+              Variable(page)
+                  .isBiggerOrEqual(books.pageCount - const Constant(1)),
+        ),
       );
 
   Future<void> saveCover(String id, Uint8List png) => (update(
@@ -199,11 +184,48 @@ class AppDatabase extends _$AppDatabase {
     ),
   );
 
-  Future<void> forget(String id) =>
-      (delete(books)..where((b) => b.id.equals(id))).go();
+  /// Marks books read, keeping their place. Books never opened get a row
+  /// that isn't in recent books.
+  Future<void> markRead(
+    Iterable<({String id, String path, String title, int pageCount})> items,
+  ) => transaction(() async {
+    for (final b in items) {
+      await into(books).insert(
+        BooksCompanion.insert(
+          id: b.id,
+          path: b.path,
+          title: b.title,
+          pageCount: b.pageCount,
+          lastOpened: notRecent,
+          finished: const Value(true),
+        ),
+        onConflict: DoUpdate(
+          (_) => const BooksCompanion(finished: Value(true)),
+        ),
+      );
+    }
+  });
+
+  /// Marks books unread: back to the first page and out of recent books.
+  /// Their reader settings and cached page sizes are kept.
+  Future<void> markUnread(Iterable<String> ids) =>
+      (update(books)..where((b) => b.id.isIn(ids))).write(
+        BooksCompanion(
+          finished: const Value(false),
+          currentPage: const Value(0),
+          lastOpened: Value(notRecent),
+        ),
+      );
+
+  /// Takes a book out of recent books, keeping its progress and settings.
+  Future<void> removeFromRecent(String id) =>
+      (update(books)..where((b) => b.id.equals(id))).write(
+        BooksCompanion(lastOpened: Value(notRecent)),
+      );
 
   Stream<List<Book>> watchRecent({int limit = 30}) =>
       (select(books)
+            ..where((b) => b.lastOpened.isBiggerThanValue(notRecent))
             ..orderBy([(b) => OrderingTerm.desc(b.lastOpened)])
             ..limit(limit))
           .watch();
@@ -254,13 +276,19 @@ class AppDatabase extends _$AppDatabase {
   /// Progress of every book that has been opened, by [Books.id].
   Stream<Map<String, BookProgress>> watchProgress() {
     final q = selectOnly(books)
-      ..addColumns([books.id, books.currentPage, books.pageCount]);
+      ..addColumns([
+        books.id,
+        books.currentPage,
+        books.pageCount,
+        books.finished,
+      ]);
     return q.watch().map(
       (rows) => {
         for (final r in rows)
           r.read(books.id)!: (
             currentPage: r.read(books.currentPage)!,
             pageCount: r.read(books.pageCount)!,
+            finished: r.read(books.finished)!,
           ),
       },
     );

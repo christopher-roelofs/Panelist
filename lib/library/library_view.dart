@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
+import '../app/providers.dart';
 import '../data/database.dart';
 import '../reader/open_book.dart';
 import 'library_model.dart';
@@ -48,6 +49,7 @@ class _Item {
     this.comic,
     this.trailing,
     this.count,
+    this.members = const [],
   });
 
   final _Kind kind;
@@ -61,6 +63,9 @@ class _Item {
 
   /// Comics inside a folder.
   final int? count;
+
+  /// Every comic in a group or folder (for marking them all read).
+  final List<LibraryComic> members;
 }
 
 class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
@@ -176,14 +181,24 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
 
   VoidCallback? _detailsFor(_Item item) {
     final c = item.comic;
-    if (item.kind != _Kind.issue || c == null) return null;
+    if (item.kind == _Kind.issue && c != null) {
+      return () => showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (_) => _DetailsSheet(comic: c, onMark: _mark),
+      );
+    }
+    if (item.members.isEmpty) return null;
     return () => showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      isScrollControlled: true,
-      builder: (_) => _DetailsSheet(comic: c),
+      builder: (_) => _GroupSheet(item: item, onMark: _mark),
     );
   }
+
+  void _mark(List<LibraryComic> comics, {required bool read}) =>
+      unawaited(markComics(ref.read(databaseProvider), comics, read: read));
 
   void _open(LibraryComic c) =>
       unawaited(openInReader(context, ref, c.location));
@@ -223,6 +238,7 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                       '${_plural(g.issueCount, 'issue', 'issues')}',
                   trailing: _plural(g.series.length, 'series', 'series'),
                   comic: g.first,
+                  members: [for (final s in g.series) ...s.comics],
                   onTap: () => _push(g.name ?? _unknownPublisher),
                 ),
             ],
@@ -263,6 +279,7 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                     comic: inside.isEmpty
                         ? null
                         : FolderGroup('', inside).first,
+                    members: inside,
                     onTap: () => _push('${r.id}'),
                   ),
             ],
@@ -289,6 +306,7 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                 trailing: '${f.comics.length}',
                 count: f.comics.length,
                 comic: f.first,
+                members: f.comics,
                 onTap: () => _push(f.name),
               ),
             for (final c in files)
@@ -308,6 +326,7 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
         '${_plural(s.comics.length, 'issue', 'issues')} · ${s.readCount} read',
     trailing: '${s.readCount}/${s.comics.length}',
     comic: s.first,
+    members: s.comics,
     onTap: () => _push(s.name),
   );
 
@@ -707,9 +726,10 @@ class _Row extends StatelessWidget {
 
 /// Where each of an issue's details came from.
 class _DetailsSheet extends StatelessWidget {
-  const _DetailsSheet({required this.comic});
+  const _DetailsSheet({required this.comic, required this.onMark});
 
   final LibraryComic comic;
+  final _OnMark onMark;
 
   @override
   Widget build(BuildContext context) {
@@ -743,7 +763,16 @@ class _DetailsSheet extends StatelessWidget {
               '$series ${comic.issueLabel}',
               style: theme.textTheme.titleLarge,
             ),
-            const SizedBox(height: 4),
+            if (e.bookId != null && e.pageCount != null) ...[
+              const SizedBox(height: 12),
+              _MarkButtons(
+                comics: [comic],
+                showRead: comic.readState != ReadState.read,
+                showUnread: comic.readState != ReadState.unread,
+                onMark: onMark,
+              ),
+            ],
+            const SizedBox(height: 16),
             Text(
               'ComicInfo is used first, then the folder or file name.',
               style: theme.textTheme.bodySmall,
@@ -777,6 +806,100 @@ class _DetailsSheet extends StatelessWidget {
                   ],
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+typedef _OnMark = void Function(List<LibraryComic>, {required bool read});
+
+/// "Mark as read" / "Mark as unread"; closes the sheet it's in.
+class _MarkButtons extends StatelessWidget {
+  const _MarkButtons({
+    required this.comics,
+    required this.onMark,
+    this.showRead = true,
+    this.showUnread = true,
+    this.all = false,
+  });
+
+  final List<LibraryComic> comics;
+  final _OnMark onMark;
+  final bool showRead;
+  final bool showUnread;
+
+  /// Says "all" (for a group).
+  final bool all;
+
+  @override
+  Widget build(BuildContext context) {
+    void mark({required bool read}) {
+      onMark(comics, read: read);
+      Navigator.of(context).pop();
+    }
+
+    final which = all ? 'all ' : '';
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (showRead)
+          FilledButton.tonalIcon(
+            onPressed: () => mark(read: true),
+            icon: const Icon(Icons.done_all),
+            label: Text('Mark ${which}as read'),
+          ),
+        if (showUnread)
+          OutlinedButton.icon(
+            onPressed: () => mark(read: false),
+            icon: const Icon(Icons.remove_done),
+            label: Text('Mark ${which}as unread'),
+          ),
+      ],
+    );
+  }
+}
+
+/// Long-press on a series, publisher or folder.
+class _GroupSheet extends StatelessWidget {
+  const _GroupSheet({required this.item, required this.onMark});
+
+  final _Item item;
+  final _OnMark onMark;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final read = item.members
+        .where((c) => c.readState == ReadState.read)
+        .length;
+    final unread = item.members
+        .where((c) => c.readState == ReadState.unread)
+        .length;
+    final n = item.members.length;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.title, style: theme.textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text(
+              '${_plural(n, 'comic', 'comics')} · $read read',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            _MarkButtons(
+              comics: item.members,
+              showRead: read < n,
+              showUnread: unread < n,
+              all: true,
+              onMark: onMark,
+            ),
           ],
         ),
       ),

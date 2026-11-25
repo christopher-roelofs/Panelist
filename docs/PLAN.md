@@ -89,7 +89,7 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
   and `#number`. Covers of comics that left the library are deleted after
   each scan.
 - Library follow-ups: watching folders for changes; folders of images as
-  library items; mark as read/unread.
+  library items.
 - Themes (`lib/app/theme.dart`, Settings screen): System / Light / Dark /
   Black (true black), and an accent (Wallpaper on Android 12+, Grey, Blue
   (default), Teal, Green, Purple, Pink, Amber, Orange). Backgrounds always
@@ -102,3 +102,10 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
   skipped). Reaching it saves the last page as progress, so the book counts
   as read even when it ends on a spread. "Read #n" replaces the reader, so
   Back returns to the library.
+- Read state: `Books.finished`, set on reaching the last page or by
+  "Mark as read" (long-press an issue, series, publisher or folder; or the
+  Continue reading menu). Paging back keeps it; "Mark as unread" clears it,
+  returns to page 1 and leaves recent books, keeping reader settings.
+  Books with `lastOpened` at the epoch (`notRecent`) aren't in recent books.
+- No database migrations until the first release: the schema is version 1;
+  after changing it, clear the app's data on test devices.

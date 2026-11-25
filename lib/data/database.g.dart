@@ -159,6 +159,21 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _finishedMeta = const VerificationMeta(
+    'finished',
+  );
+  @override
+  late final GeneratedColumn<bool> finished = GeneratedColumn<bool>(
+    'finished',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("finished" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _pageSizesMeta = const VerificationMeta(
     'pageSizes',
   );
@@ -223,6 +238,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     summary,
     rightToLeft,
     publisher,
+    finished,
     pageSizes,
     fitMode,
     layoutMode,
@@ -343,6 +359,12 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         publisher.isAcceptableOrUnknown(data['publisher']!, _publisherMeta),
       );
     }
+    if (data.containsKey('finished')) {
+      context.handle(
+        _finishedMeta,
+        finished.isAcceptableOrUnknown(data['finished']!, _finishedMeta),
+      );
+    }
     if (data.containsKey('page_sizes')) {
       context.handle(
         _pageSizesMeta,
@@ -436,6 +458,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.string,
         data['${effectivePrefix}publisher'],
       ),
+      finished: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}finished'],
+      )!,
       pageSizes: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}page_sizes'],
@@ -477,6 +503,12 @@ class Book extends DataClass implements Insertable<Book> {
   final String? summary;
   final bool? rightToLeft;
   final String? publisher;
+
+  /// Read to the end (or marked read). Stays set when paging back or
+  /// re-reading, until the book is marked unread.
+  final bool finished;
+
+  /// Cached page sizes, JSON `[[w,h] | null, ...]`.
   final String? pageSizes;
   final String? fitMode;
   final String? layoutMode;
@@ -497,6 +529,7 @@ class Book extends DataClass implements Insertable<Book> {
     this.summary,
     this.rightToLeft,
     this.publisher,
+    required this.finished,
     this.pageSizes,
     this.fitMode,
     this.layoutMode,
@@ -538,6 +571,7 @@ class Book extends DataClass implements Insertable<Book> {
     if (!nullToAbsent || publisher != null) {
       map['publisher'] = Variable<String>(publisher);
     }
+    map['finished'] = Variable<bool>(finished);
     if (!nullToAbsent || pageSizes != null) {
       map['page_sizes'] = Variable<String>(pageSizes);
     }
@@ -586,6 +620,7 @@ class Book extends DataClass implements Insertable<Book> {
       publisher: publisher == null && nullToAbsent
           ? const Value.absent()
           : Value(publisher),
+      finished: Value(finished),
       pageSizes: pageSizes == null && nullToAbsent
           ? const Value.absent()
           : Value(pageSizes),
@@ -622,6 +657,7 @@ class Book extends DataClass implements Insertable<Book> {
       summary: serializer.fromJson<String?>(json['summary']),
       rightToLeft: serializer.fromJson<bool?>(json['rightToLeft']),
       publisher: serializer.fromJson<String?>(json['publisher']),
+      finished: serializer.fromJson<bool>(json['finished']),
       pageSizes: serializer.fromJson<String?>(json['pageSizes']),
       fitMode: serializer.fromJson<String?>(json['fitMode']),
       layoutMode: serializer.fromJson<String?>(json['layoutMode']),
@@ -647,6 +683,7 @@ class Book extends DataClass implements Insertable<Book> {
       'summary': serializer.toJson<String?>(summary),
       'rightToLeft': serializer.toJson<bool?>(rightToLeft),
       'publisher': serializer.toJson<String?>(publisher),
+      'finished': serializer.toJson<bool>(finished),
       'pageSizes': serializer.toJson<String?>(pageSizes),
       'fitMode': serializer.toJson<String?>(fitMode),
       'layoutMode': serializer.toJson<String?>(layoutMode),
@@ -670,6 +707,7 @@ class Book extends DataClass implements Insertable<Book> {
     Value<String?> summary = const Value.absent(),
     Value<bool?> rightToLeft = const Value.absent(),
     Value<String?> publisher = const Value.absent(),
+    bool? finished,
     Value<String?> pageSizes = const Value.absent(),
     Value<String?> fitMode = const Value.absent(),
     Value<String?> layoutMode = const Value.absent(),
@@ -690,6 +728,7 @@ class Book extends DataClass implements Insertable<Book> {
     summary: summary.present ? summary.value : this.summary,
     rightToLeft: rightToLeft.present ? rightToLeft.value : this.rightToLeft,
     publisher: publisher.present ? publisher.value : this.publisher,
+    finished: finished ?? this.finished,
     pageSizes: pageSizes.present ? pageSizes.value : this.pageSizes,
     fitMode: fitMode.present ? fitMode.value : this.fitMode,
     layoutMode: layoutMode.present ? layoutMode.value : this.layoutMode,
@@ -718,6 +757,7 @@ class Book extends DataClass implements Insertable<Book> {
           ? data.rightToLeft.value
           : this.rightToLeft,
       publisher: data.publisher.present ? data.publisher.value : this.publisher,
+      finished: data.finished.present ? data.finished.value : this.finished,
       pageSizes: data.pageSizes.present ? data.pageSizes.value : this.pageSizes,
       fitMode: data.fitMode.present ? data.fitMode.value : this.fitMode,
       layoutMode: data.layoutMode.present
@@ -747,6 +787,7 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('summary: $summary, ')
           ..write('rightToLeft: $rightToLeft, ')
           ..write('publisher: $publisher, ')
+          ..write('finished: $finished, ')
           ..write('pageSizes: $pageSizes, ')
           ..write('fitMode: $fitMode, ')
           ..write('layoutMode: $layoutMode, ')
@@ -772,6 +813,7 @@ class Book extends DataClass implements Insertable<Book> {
     summary,
     rightToLeft,
     publisher,
+    finished,
     pageSizes,
     fitMode,
     layoutMode,
@@ -796,6 +838,7 @@ class Book extends DataClass implements Insertable<Book> {
           other.summary == this.summary &&
           other.rightToLeft == this.rightToLeft &&
           other.publisher == this.publisher &&
+          other.finished == this.finished &&
           other.pageSizes == this.pageSizes &&
           other.fitMode == this.fitMode &&
           other.layoutMode == this.layoutMode &&
@@ -818,6 +861,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<String?> summary;
   final Value<bool?> rightToLeft;
   final Value<String?> publisher;
+  final Value<bool> finished;
   final Value<String?> pageSizes;
   final Value<String?> fitMode;
   final Value<String?> layoutMode;
@@ -839,6 +883,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.summary = const Value.absent(),
     this.rightToLeft = const Value.absent(),
     this.publisher = const Value.absent(),
+    this.finished = const Value.absent(),
     this.pageSizes = const Value.absent(),
     this.fitMode = const Value.absent(),
     this.layoutMode = const Value.absent(),
@@ -861,6 +906,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.summary = const Value.absent(),
     this.rightToLeft = const Value.absent(),
     this.publisher = const Value.absent(),
+    this.finished = const Value.absent(),
     this.pageSizes = const Value.absent(),
     this.fitMode = const Value.absent(),
     this.layoutMode = const Value.absent(),
@@ -887,6 +933,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<String>? summary,
     Expression<bool>? rightToLeft,
     Expression<String>? publisher,
+    Expression<bool>? finished,
     Expression<String>? pageSizes,
     Expression<String>? fitMode,
     Expression<String>? layoutMode,
@@ -909,6 +956,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (summary != null) 'summary': summary,
       if (rightToLeft != null) 'right_to_left': rightToLeft,
       if (publisher != null) 'publisher': publisher,
+      if (finished != null) 'finished': finished,
       if (pageSizes != null) 'page_sizes': pageSizes,
       if (fitMode != null) 'fit_mode': fitMode,
       if (layoutMode != null) 'layout_mode': layoutMode,
@@ -933,6 +981,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<String?>? summary,
     Value<bool?>? rightToLeft,
     Value<String?>? publisher,
+    Value<bool>? finished,
     Value<String?>? pageSizes,
     Value<String?>? fitMode,
     Value<String?>? layoutMode,
@@ -955,6 +1004,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       summary: summary ?? this.summary,
       rightToLeft: rightToLeft ?? this.rightToLeft,
       publisher: publisher ?? this.publisher,
+      finished: finished ?? this.finished,
       pageSizes: pageSizes ?? this.pageSizes,
       fitMode: fitMode ?? this.fitMode,
       layoutMode: layoutMode ?? this.layoutMode,
@@ -1011,6 +1061,9 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (publisher.present) {
       map['publisher'] = Variable<String>(publisher.value);
     }
+    if (finished.present) {
+      map['finished'] = Variable<bool>(finished.value);
+    }
     if (pageSizes.present) {
       map['page_sizes'] = Variable<String>(pageSizes.value);
     }
@@ -1047,6 +1100,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('summary: $summary, ')
           ..write('rightToLeft: $rightToLeft, ')
           ..write('publisher: $publisher, ')
+          ..write('finished: $finished, ')
           ..write('pageSizes: $pageSizes, ')
           ..write('fitMode: $fitMode, ')
           ..write('layoutMode: $layoutMode, ')
@@ -2396,6 +2450,7 @@ typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
   Value<String?> summary,
   Value<bool?> rightToLeft,
   Value<String?> publisher,
+  Value<bool> finished,
   Value<String?> pageSizes,
   Value<String?> fitMode,
   Value<String?> layoutMode,
@@ -2418,6 +2473,7 @@ typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
   Value<String?> summary,
   Value<bool?> rightToLeft,
   Value<String?> publisher,
+  Value<bool> finished,
   Value<String?> pageSizes,
   Value<String?> fitMode,
   Value<String?> layoutMode,
@@ -2505,6 +2561,11 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
 
   ColumnFilters<String> get publisher => $composableBuilder(
     column: $table.publisher,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get finished => $composableBuilder(
+    column: $table.finished,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2613,6 +2674,11 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get finished => $composableBuilder(
+    column: $table.finished,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get pageSizes => $composableBuilder(
     column: $table.pageSizes,
     builder: (column) => ColumnOrderings(column),
@@ -2694,6 +2760,9 @@ class $$BooksTableAnnotationComposer
   GeneratedColumn<String> get publisher =>
       $composableBuilder(column: $table.publisher, builder: (column) => column);
 
+  GeneratedColumn<bool> get finished =>
+      $composableBuilder(column: $table.finished, builder: (column) => column);
+
   GeneratedColumn<String> get pageSizes =>
       $composableBuilder(column: $table.pageSizes, builder: (column) => column);
 
@@ -2754,6 +2823,7 @@ class $$BooksTableTableManager
                 Value<String?> summary = const Value.absent(),
                 Value<bool?> rightToLeft = const Value.absent(),
                 Value<String?> publisher = const Value.absent(),
+                Value<bool> finished = const Value.absent(),
                 Value<String?> pageSizes = const Value.absent(),
                 Value<String?> fitMode = const Value.absent(),
                 Value<String?> layoutMode = const Value.absent(),
@@ -2775,6 +2845,7 @@ class $$BooksTableTableManager
                 summary: summary,
                 rightToLeft: rightToLeft,
                 publisher: publisher,
+                finished: finished,
                 pageSizes: pageSizes,
                 fitMode: fitMode,
                 layoutMode: layoutMode,
@@ -2798,6 +2869,7 @@ class $$BooksTableTableManager
                 Value<String?> summary = const Value.absent(),
                 Value<bool?> rightToLeft = const Value.absent(),
                 Value<String?> publisher = const Value.absent(),
+                Value<bool> finished = const Value.absent(),
                 Value<String?> pageSizes = const Value.absent(),
                 Value<String?> fitMode = const Value.absent(),
                 Value<String?> layoutMode = const Value.absent(),
@@ -2819,6 +2891,7 @@ class $$BooksTableTableManager
                 summary: summary,
                 rightToLeft: rightToLeft,
                 publisher: publisher,
+                finished: finished,
                 pageSizes: pageSizes,
                 fitMode: fitMode,
                 layoutMode: layoutMode,

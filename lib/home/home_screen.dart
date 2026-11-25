@@ -71,7 +71,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _forget(Book book) async {
-    await ref.read(databaseProvider).forget(book.id);
+    await ref.read(databaseProvider).removeFromRecent(book.id);
     await AndroidDocuments.release(book.path);
   }
 
@@ -89,7 +89,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final recents = ref.watch(recentBooksProvider).value ?? const <Book>[];
     final unfinished = [
       for (final b in recents)
-        if (b.currentPage < b.pageCount - 1) b,
+        if (!b.finished) b,
     ];
     final hasLibrary =
         ref.watch(libraryRootsProvider).value?.isNotEmpty ?? false;
@@ -195,6 +195,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       books: unfinished,
                       onOpen: _openRecent,
                       onRemove: _forget,
+                      onMarkRead: (b) => unawaited(
+                        ref.read(databaseProvider).markRead([
+                          (
+                            id: b.id,
+                            path: b.path,
+                            title: b.title,
+                            pageCount: b.pageCount,
+                          ),
+                        ]),
+                      ),
                     ),
                   ),
               ],
@@ -211,11 +221,13 @@ class _ContinueReading extends StatelessWidget {
     required this.books,
     required this.onOpen,
     required this.onRemove,
+    required this.onMarkRead,
   });
 
   final List<Book> books;
   final ValueChanged<Book> onOpen;
   final ValueChanged<Book> onRemove;
+  final ValueChanged<Book> onMarkRead;
 
   @override
   Widget build(BuildContext context) {
@@ -242,6 +254,7 @@ class _ContinueReading extends StatelessWidget {
                 book: books[i],
                 onOpen: () => onOpen(books[i]),
                 onRemove: () => onRemove(books[i]),
+                onMarkRead: () => onMarkRead(books[i]),
               ),
             ),
           ),
@@ -256,11 +269,13 @@ class _BookTile extends StatelessWidget {
     required this.book,
     required this.onOpen,
     required this.onRemove,
+    required this.onMarkRead,
   });
 
   final Book book;
   final VoidCallback onOpen;
   final VoidCallback onRemove;
+  final VoidCallback onMarkRead;
 
   @override
   Widget build(BuildContext context) {
@@ -303,6 +318,10 @@ class _BookTile extends StatelessWidget {
                       shadows: [Shadow(blurRadius: 4)],
                     ),
                     itemBuilder: (_) => [
+                      PopupMenuItem(
+                        onTap: onMarkRead,
+                        child: const Text('Mark as read'),
+                      ),
                       PopupMenuItem(
                         onTap: onRemove,
                         child: const Text('Remove from recent'),
