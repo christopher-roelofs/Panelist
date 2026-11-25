@@ -43,7 +43,7 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
 | M1 ✅ | Great CBZ reader: single page, fit modes, zoom, keyboard/mouse/taps, preloading, saved progress, recent files | 200-page CBZ is smooth on Linux |
 | M2 ✅ | Formats: CBR/CB7/CBT via libarchive FFI, PDF via pdfrx | All common formats open |
 | M3 ✅ | Double-page spreads (auto wide-page detection, cover offset), per-book settings, ComicInfo.xml | Spreads read correctly |
-| M4 | Android: SAF file access, "Open with" intents, touch tuning, memory tuning on phones | Usable on Android phone + tablet |
+| M4 ✅ | Android: SAF file access, "Open with" intents, touch tuning, memory tuning on phones | Usable on Android phone + tablet |
 | M5 | Library: library folders, thumbnails, continue reading, Folders / Series / Publishers views | Home screen with Continue Reading |
 | Later | RTL manga, webtoon scroll, panel zoom, OPDS/Komga, Windows/macOS/iOS, AVIF/JXL | |
 
@@ -122,7 +122,6 @@ newer).
   Search matches every word against series, title, file name, publisher
   and `#number`. Covers of comics that left the library are deleted after
   each scan.
-- Library follow-ups: folders of images as library items.
 - Auto refresh (`lib/library/library_refresh.dart`): on disk, every library
   folder is watched (Dart's recursive watch misses subfolders on Linux) and
   re-watched after each scan; changes are debounced 2 s into one scan.
