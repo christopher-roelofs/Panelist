@@ -83,7 +83,14 @@ abstract final class AndroidDocuments {
         () => _channel.invokeMethod<void>('closeFd', fd),
       );
     }
-    return OpenedDocument(r['path']! as String, name, null);
+    // A temporary copy (the provider only offers a stream): delete it once
+    // reading is done.
+    final copy = r['path']! as String;
+    return OpenedDocument(
+      copy,
+      name,
+      () => _channel.invokeMethod<void>('deleteCopy', copy),
+    );
   }
 
   /// Whether [uri] can still be opened (not deleted, permission intact).

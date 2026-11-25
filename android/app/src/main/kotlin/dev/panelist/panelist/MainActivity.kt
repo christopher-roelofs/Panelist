@@ -39,6 +39,7 @@ class MainActivity : FlutterActivity() {
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         channel.setMethodCallHandler(::onMethodCall)
         initialUri = viewedUri(intent)
+        io.execute(::sweepCopies)
     }
 
     override fun onStart() {
@@ -72,6 +73,10 @@ class MainActivity : FlutterActivity() {
                 null
             }
             "exists" -> background(result) { exists(Uri.parse(call.arguments as String)) }
+            "deleteCopy" -> background(result) {
+                deleteCopy(call.arguments as String)
+                null
+            }
             "release" -> background(result) {
                 releasePermission(Uri.parse(call.arguments as String))
                 null
@@ -241,12 +246,38 @@ class MainActivity : FlutterActivity() {
             return mapOf("fd" to pfd.detachFd(), "name" to name)
         }
         pfd.close()
-        val dir = File(cacheDir, "documents").apply { mkdirs() }
-        val copy = File(dir, "${uri.toString().hashCode().toUInt()}")
-        contentResolver.openInputStream(uri)!!.use { input ->
-            copy.outputStream().use { input.copyTo(it) }
+        // Unique, so two opens of one document don't share a file.
+        val copy = File.createTempFile("doc", null, copiesDir())
+        try {
+            contentResolver.openInputStream(uri)!!.use { input ->
+                copy.outputStream().use { input.copyTo(it) }
+            }
+        } catch (e: Exception) {
+            copy.delete()
+            throw e
         }
         return mapOf("path" to copy.path, "name" to name)
+    }
+
+    private fun copiesDir() = File(cacheDir, "documents").apply { mkdirs() }
+
+    /** Deletes a copy made by [open] once it's no longer being read. */
+    private fun deleteCopy(path: String) {
+        val file = File(path)
+        if (file.parentFile?.canonicalPath == copiesDir().canonicalPath) {
+            file.delete()
+        }
+    }
+
+    /**
+     * Deletes copies left by earlier runs (e.g. if the app was killed while
+     * reading). Copies made by this process are kept: the activity is
+     * recreated on rotation while a book may still be open.
+     */
+    private fun sweepCopies() {
+        copiesDir().listFiles()?.forEach {
+            if (it.lastModified() < processStart) it.delete()
+        }
     }
 
     private fun isSeekable(pfd: ParcelFileDescriptor): Boolean =
@@ -293,5 +324,8 @@ class MainActivity : FlutterActivity() {
         private const val CHANNEL = "panelist/android"
         private const val PICK_REQUEST = 7301
         private const val TREE_REQUEST = 7302
+
+        /** When this process started (the class is loaded once per process). */
+        private val processStart = System.currentTimeMillis()
     }
 }

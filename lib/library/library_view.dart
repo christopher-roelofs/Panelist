@@ -615,6 +615,7 @@ class _Tile extends StatelessWidget {
     return InkWell(
       onTap: item.onTap,
       onLongPress: onLongPress,
+      onSecondaryTap: onLongPress,
       borderRadius: BorderRadius.circular(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -703,23 +704,27 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      onTap: item.onTap,
-      onLongPress: onLongPress,
-      leading: SizedBox(
-        width: 40,
-        height: 60,
-        child: item.kind == _Kind.folder
-            ? const Icon(Icons.folder_outlined, size: 32)
-            : LibraryCover(comic: item.comic),
+    // Right-click does what long-press does (ListTile has no hook for it).
+    return GestureDetector(
+      onSecondaryTap: onLongPress,
+      child: ListTile(
+        onTap: item.onTap,
+        onLongPress: onLongPress,
+        leading: SizedBox(
+          width: 40,
+          height: 60,
+          child: item.kind == _Kind.folder
+              ? const Icon(Icons.folder_outlined, size: 32)
+              : LibraryCover(comic: item.comic),
+        ),
+        title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          item.subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: item.trailing == null ? null : Text(item.trailing!),
       ),
-      title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        item.subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: item.trailing == null ? null : Text(item.trailing!),
     );
   }
 }

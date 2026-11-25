@@ -286,50 +286,25 @@ class _BookTile extends StatelessWidget {
     final cover = book.cover;
     return InkWell(
       onTap: onOpen,
+      onLongPress: () => _showActions(context),
+      onSecondaryTap: () => _showActions(context),
       borderRadius: BorderRadius.circular(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: ColoredBox(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    child: cover == null
-                        ? const Icon(Icons.menu_book, size: 40)
-                        : Image.memory(
-                            cover,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                          ),
-                  ),
-                ),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: PopupMenuButton<void>(
-                    tooltip: 'More',
-                    icon: const Icon(
-                      Icons.more_vert,
-                      color: Colors.white,
-                      shadows: [Shadow(blurRadius: 4)],
-                    ),
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        onTap: onMarkRead,
-                        child: const Text('Mark as read'),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: ColoredBox(
+                color: theme.colorScheme.surfaceContainerHighest,
+                child: cover == null
+                    ? const Icon(Icons.menu_book, size: 40)
+                    : Image.memory(
+                        cover,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
                       ),
-                      PopupMenuItem(
-                        onTap: onRemove,
-                        child: const Text('Remove from recent'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
           const SizedBox(height: 6),
@@ -346,6 +321,58 @@ class _BookTile extends StatelessWidget {
             style: theme.textTheme.bodySmall,
           ),
         ],
+      ),
+    );
+  }
+
+  /// Long-press (or right-click): what else to do with this book.
+  void _showActions(BuildContext context) {
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheet) {
+          final theme = Theme.of(sheet);
+          void run(VoidCallback action) {
+            Navigator.of(sheet).pop();
+            action();
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(book.displayTitle, style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Page ${book.currentPage + 1} of ${book.pageCount}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: () => run(onMarkRead),
+                        icon: const Icon(Icons.done_all),
+                        label: const Text('Mark as read'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => run(onRemove),
+                        icon: const Icon(Icons.history_toggle_off),
+                        label: const Text('Remove from recent'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -96,7 +96,10 @@ newer).
   Tablet (Tab S6 Lite, release): cold start ~0.6 s; paging through a
   151-page CBZ levels off around 250–300 MB PSS with the image cache sized
   to ~6 screen pages on Android (`_sizeImageCache` in `main.dart`).
-- M4 remaining: phone testing, cache/documents sweep.
+- Android copies of stream-only documents (some cloud providers) live in
+  `cache/documents`: deleted when the source closes, and copies older than
+  the process are swept at launch. Deleting on close isn't yet tested with
+  a real cloud file.
 - Touch: all touch gestures go through one recognizer inside the zoom
   viewer (`_TouchRecognizer` in `zoomable_page.dart`); InteractiveViewer
   only serves mouse/trackpad. One finger: page drag (unzoomed), pan with
