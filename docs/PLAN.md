@@ -44,7 +44,7 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
 | M2 ✅ | Formats: CBR/CB7/CBT via libarchive FFI, PDF via pdfrx | All common formats open |
 | M3 ✅ | Double-page spreads (auto wide-page detection, cover offset), per-book settings, ComicInfo.xml | Spreads read correctly |
 | M4 ✅ | Android: SAF file access, "Open with" intents, touch tuning, memory tuning on phones | Usable on Android phone + tablet |
-| M5 | Library: library folders, thumbnails, continue reading, Folders / Series / Publishers views | Home screen with Continue Reading |
+| M5 ✅ | Library: library folders, thumbnails, continue reading, Folders / Series / Publishers views | Home screen with Continue Reading |
 | Later | RTL manga, webtoon scroll, panel zoom, OPDS/Komga, Windows/macOS/iOS, AVIF/JXL | |
 
 ## Distribution (before the first release)
@@ -109,7 +109,7 @@ newer).
   page view ignore a second finger.
 - Reader: paging backwards in fit-width should land at the bottom of the
   previous page.
-- Library (M5, in progress): library folders are paths, or on Android SAF
+- Library (M5): library folders are paths, or on Android SAF
   tree URIs (`pickTree`/`listTree` in `MainActivity.kt`); comics inside are
   read via their document URIs like single files. `LibraryScanner` lists
   every folder on start and on rescan, and reopens only new files or files
