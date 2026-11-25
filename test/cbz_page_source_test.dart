@@ -75,6 +75,55 @@ void main() {
     expect(other.id, isNot(id));
   });
 
+  test('id comes from the pages, not metadata or packing', () async {
+    Future<String> idOf(String name, Map<String, List<int>> entries) async {
+      final src = await CbzPageSource.open(writeZip(name, entries));
+      addTearDown(src.close);
+      return src.id;
+    }
+
+    final plain = await idOf('plain.cbz', {
+      '01.jpg': big,
+      '02.jpg': [2],
+    });
+    // Adding or changing ComicInfo.xml (what tagging does) keeps the id.
+    expect(
+      await idOf('tagged.cbz', {
+        '01.jpg': big,
+        '02.jpg': [2],
+        'ComicInfo.xml': '<ComicInfo><Series>S</Series></ComicInfo>'.codeUnits,
+      }),
+      plain,
+    );
+    // So do page names and folders, as long as the order is the same.
+    expect(
+      await idOf('renamed.cbz', {
+        'S/p1.jpg': big,
+        'S/p2.jpg': [2],
+      }),
+      plain,
+    );
+    // Different, reordered, missing or extra pages are a different book.
+    for (final pages in [
+      {
+        '01.jpg': big,
+        '02.jpg': [3],
+      },
+      {
+        '01.jpg': [2],
+        '02.jpg': big,
+      },
+      {'01.jpg': big},
+      {
+        '01.jpg': big,
+        '02.jpg': [2],
+        '03.jpg': [3],
+      },
+    ]) {
+      expect(await idOf('other.cbz', pages), isNot(plain), reason: '$pages');
+    }
+  });
+
   test('archive without images is rejected', () {
     final path = writeZip('empty.cbz', {
       'readme.txt': [1],

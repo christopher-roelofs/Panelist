@@ -24,6 +24,21 @@ String fileFingerprint(String path) {
   }
 }
 
+/// A content-based identity from a comic's pages alone: SHA-1 over each
+/// page's CRC-32 and size, in reading order. Metadata files (ComicInfo.xml
+/// and the like), file and page names, and how the archive was compressed
+/// don't affect it, so tagging a comic or re-zipping it keeps its reading
+/// progress. Null if a page has no CRC (then use [fileFingerprint]).
+String? pagesFingerprint(Iterable<({int? crc32, int size})> pages) {
+  final parts = <String>[];
+  for (final page in pages) {
+    final crc = page.crc32;
+    if (crc == null) return null;
+    parts.add('${crc.toRadixString(16)}:${page.size}');
+  }
+  return 'pages:${sha1.convert(parts.join(',').codeUnits)}';
+}
+
 /// The first [n] bytes of [path], for format sniffing.
 List<int> readMagic(String path, [int n = 8]) {
   final (length, read, done) = _openForRead(path);

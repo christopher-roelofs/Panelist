@@ -45,6 +45,8 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
 | M3 ✅ | Double-page spreads (auto wide-page detection, cover offset), per-book settings, ComicInfo.xml | Spreads read correctly |
 | M4 ✅ | Android: SAF file access, "Open with" intents, touch tuning, memory tuning on phones | Usable on Android phone + tablet |
 | M5 ✅ | Library: library folders, thumbnails, continue reading, Folders / Series / Publishers views | Home screen with Continue Reading |
+| M6 | Metadata management (desktop): book IDs that ignore metadata files; ComicInfo editor (one issue, then bulk); save into archives (CBZ in place, CBR→CBZ, via temp file); Metron lookup (ComicVine optional); rename/organise by template, promo clean-up, publisher aliases. Builds on the ComicTools ideas | The PC library can be tagged and organised from Panelist |
+| M7 | Library over the local network: the desktop app serves the library (OPDS-style); phone/tablet browse, read or download from it, and send reading progress back (also for comics copied onto the device). Metadata is edited on the PC only | Progress read on the tablet shows on the PC |
 | Later | RTL manga, webtoon scroll, panel zoom, OPDS/Komga, Windows/macOS/iOS, AVIF/JXL | |
 
 ## Distribution (before the first release)
@@ -146,3 +148,8 @@ newer).
   Books with `lastOpened` at the epoch (`notRecent`) aren't in recent books.
 - No database migrations until the first release: the schema is version 1;
   after changing it, clear the app's data on test devices.
+- Book IDs: CBZ uses `pagesFingerprint` (SHA-1 of each page's CRC-32 and
+  size, in reading order, from the central directory), so writing
+  ComicInfo.xml or re-zipping keeps progress. CBR/CB7/CBT and PDF still use
+  `fileFingerprint` (size + first/last 64 KiB); M6 must move progress to the
+  new ID when it converts CBR→CBZ, rewrites CB7/CBT, or removes pages.

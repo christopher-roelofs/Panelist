@@ -182,7 +182,12 @@ void _workerMain((SendPort, String, String) init) {
         if (f.isFile && ComicInfo.isComicInfoName(f.name)) f,
     ]..sort((a, b) => depth(a) - depth(b));
     comicInfo = infos.firstOrNull;
-    fingerprint = fileFingerprint(path);
+    // From the pages, so writing ComicInfo.xml keeps the book's identity.
+    fingerprint =
+        pagesFingerprint([
+          for (final f in pages) (crc32: f.crc32, size: f.size),
+        ]) ??
+        fileFingerprint(path);
   } catch (e) {
     reply.send(('error', 'Not a readable CBZ/ZIP file: $name'));
     return;
