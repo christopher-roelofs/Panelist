@@ -169,3 +169,18 @@ newer).
 - Folders of images aren't comics: the "Open folder of images" button and
   `FolderPageSource` were removed (M0 had them), and the library only
   lists comic files.
+- CBR→CBZ (M6 step 3, desktop): "Convert to CBZ" on an issue, and
+  "Convert N to CBZ" on series, publisher and folder sheets (CBR, CB7, CBT,
+  RAR, 7z, tar by name). Every file is extracted with libarchive into a
+  hidden temp folder beside the comic and zipped (pages stored as-is,
+  ComicInfo and other files deflated; `__MACOSX` and dot files dropped;
+  unsafe paths made relative). The CBZ is checked page by page (names,
+  CRC-32, sizes, reading order) before it's renamed into place; an existing
+  CBZ is never overwritten. A ZIP named .cbr is just renamed. `moveBook`
+  moves progress and settings to the new ID; the original goes to the
+  trash (`gio trash`; elsewhere it's kept and the result says so). PDFs
+  aren't converted. CBZs come out ~2–3% bigger than RAR.
+  A folder's sheet covers all its subfolders; breadcrumbs (the library
+  folder, the current folder, a publisher or series, "All …") open the same
+  sheet on right-click / long-press. Converting can be stopped between
+  comics.

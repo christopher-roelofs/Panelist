@@ -10,6 +10,7 @@ import '../data/database.dart';
 import '../reader/open_book.dart';
 import 'bulk_field_editor.dart';
 import 'comic_info_editor.dart';
+import 'convert_comics.dart';
 import 'library_model.dart';
 import 'library_providers.dart';
 import 'library_scanner.dart';
@@ -84,6 +85,32 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
 
   void _goTo(int depth) => setState(() => _path.length = depth);
 
+  /// Every comic at breadcrumb [depth] (a library folder or folder with all
+  /// its subfolders, a publisher, a series, or the whole library).
+  List<LibraryComic> _comicsAt(
+    int depth,
+    LibraryView view,
+    List<LibraryRoot> roots,
+    List<LibraryComic> comics,
+  ) {
+    final saved = [..._path];
+    try {
+      _path.length = depth;
+      final (_, items) = _level(view, roots, comics);
+      final seen = <String>{};
+      return [
+        for (final item in items)
+          for (final c
+              in item.kind == _Kind.issue ? [?item.comic] : item.members)
+            if (seen.add(c.location)) c,
+      ];
+    } finally {
+      _path
+        ..clear()
+        ..addAll(saved);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(libraryPrefsProvider);
@@ -119,7 +146,21 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
         )
         ..add(
           SliverToBoxAdapter(
-            child: _Breadcrumbs(crumbs: crumbs, onTap: _goTo),
+            child: _Breadcrumbs(
+              crumbs: crumbs,
+              onTap: _goTo,
+              onMenu: query.isNotEmpty
+                  ? null
+                  : (depth) => _detailsFor(
+                      _Item(
+                        kind: _Kind.folder,
+                        title: crumbs[depth],
+                        subtitle: '',
+                        onTap: () {},
+                        members: _comicsAt(depth, prefs.view, roots, comics),
+                      ),
+                    ),
+            ),
           ),
         );
       if (items.isEmpty) {
@@ -202,6 +243,12 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                   unawaited(editComicInfo(context, c));
                 }
               : null,
+          onConvert: isConvertibleComic(c)
+              ? () {
+                  Navigator.of(sheet).pop();
+                  unawaited(convertWithProgress(context, ref, [c]));
+                }
+              : null,
         ),
       );
     }
@@ -212,6 +259,10 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
       builder: (sheet) => _GroupSheet(
         item: item,
         onMark: _mark,
+        onConvert: (comics) {
+          Navigator.of(sheet).pop();
+          unawaited(convertWithProgress(context, ref, comics));
+        },
         onEdit: canEditMetadata && item.field != null
             ? () {
                 Navigator.of(sheet).pop();
@@ -518,12 +569,15 @@ class _Header extends StatelessWidget {
 }
 
 class _Breadcrumbs extends StatelessWidget {
-  const _Breadcrumbs({required this.crumbs, required this.onTap});
+  const _Breadcrumbs({required this.crumbs, required this.onTap, this.onMenu});
 
   final List<String> crumbs;
 
   /// Called with the depth to go back to.
   final ValueChanged<int> onTap;
+
+  /// The long-press / right-click action for the crumb at a depth.
+  final VoidCallback? Function(int depth)? onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -543,18 +597,29 @@ class _Breadcrumbs extends StatelessWidget {
             const SizedBox(width: 12),
           for (final (i, name) in crumbs.indexed)
             if (i == crumbs.length - 1)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                child: Text(name, style: theme.textTheme.bodyLarge),
+              GestureDetector(
+                onLongPress: () => onMenu?.call(i)?.call(),
+                onSecondaryTap: () => onMenu?.call(i)?.call(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 8,
+                  ),
+                  child: Text(name, style: theme.textTheme.bodyLarge),
+                ),
               )
             else ...[
-              TextButton(
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+              GestureDetector(
+                onSecondaryTap: () => onMenu?.call(i)?.call(),
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                  ),
+                  onPressed: () => onTap(i),
+                  onLongPress: () => onMenu?.call(i)?.call(),
+                  child: Text(name),
                 ),
-                onPressed: () => onTap(i),
-                child: Text(name),
               ),
               Text('›', style: theme.textTheme.bodyLarge),
             ],
@@ -772,10 +837,14 @@ class _DetailsSheet extends StatelessWidget {
     required this.comic,
     required this.onMark,
     required this.onEdit,
+    required this.onConvert,
   });
 
   final LibraryComic comic;
   final _OnMark onMark;
+
+  /// Converts the comic to CBZ; null where it can't be.
+  final VoidCallback? onConvert;
 
   /// Opens the metadata editor; null where the comic can't be edited.
   final VoidCallback? onEdit;
@@ -829,10 +898,24 @@ class _DetailsSheet extends StatelessWidget {
                 ],
               ),
             ],
-            if (onEdit == null && canEditMetadata) ...[
+            if (onEdit == null && onConvert != null) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: onConvert,
+                    icon: const Icon(Icons.transform),
+                    label: const Text('Convert to CBZ'),
+                  ),
+                  Text('to edit its details', style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ] else if (onEdit == null && canEditMetadata) ...[
               const SizedBox(height: 8),
               Text(
-                'Only CBZ files can be edited for now.',
+                'PDF details can’t be edited.',
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -937,10 +1020,14 @@ class _GroupSheet extends StatelessWidget {
     required this.item,
     required this.onMark,
     required this.onEdit,
+    required this.onConvert,
   });
 
   final _Item item;
   final _OnMark onMark;
+
+  /// Converts the given members to CBZ.
+  final void Function(List<LibraryComic> comics) onConvert;
 
   /// Edits the field the group is named by, for all its comics.
   final VoidCallback? onEdit;
@@ -955,6 +1042,7 @@ class _GroupSheet extends StatelessWidget {
         .where((c) => c.readState == ReadState.unread)
         .length;
     final n = item.members.length;
+    final convertible = item.members.where(isConvertibleComic).toList();
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -981,6 +1069,16 @@ class _GroupSheet extends StatelessWidget {
                     onPressed: onEdit,
                     icon: const Icon(Icons.edit_outlined),
                     label: Text('Edit ${item.field!.$2.toLowerCase()}'),
+                  ),
+                if (convertible.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: () => onConvert(convertible),
+                    icon: const Icon(Icons.transform),
+                    label: Text(
+                      convertible.length == 1
+                          ? 'Convert 1 to CBZ'
+                          : 'Convert ${convertible.length} to CBZ',
+                    ),
                   ),
               ],
             ),

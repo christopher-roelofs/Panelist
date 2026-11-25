@@ -217,6 +217,22 @@ class AppDatabase extends _$AppDatabase {
         ),
       );
 
+  /// A book's file was converted or moved: its progress, settings and place
+  /// in recent books now belong to [newId] at [path]. If [newId] already
+  /// has a row (it was opened too), the one opened last wins.
+  Future<void> moveBook(String oldId, String newId, String path) =>
+      transaction(() async {
+        final old = await book(oldId);
+        if (old == null) return;
+        final existing = oldId == newId ? null : await book(newId);
+        final keep =
+            existing != null && existing.lastOpened.isAfter(old.lastOpened)
+            ? existing
+            : old;
+        await (delete(books)..where((b) => b.id.isIn({oldId, newId}))).go();
+        await into(books).insert(keep.copyWith(id: newId, path: path));
+      });
+
   /// Takes a book out of recent books, keeping its progress and settings.
   Future<void> removeFromRecent(String id) =>
       (update(books)..where((b) => b.id.equals(id))).write(

@@ -92,6 +92,64 @@ void main() {
     });
   }
 
+  testWidgets('a folder, or the library folder, covers all subfolders', (
+    tester,
+  ) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    LibraryComic at(String folder, String file) => LibraryComic(
+      LibraryEntry(
+        location: '/lib/$folder/$file',
+        rootId: 1,
+        folder: folder,
+        fileName: file,
+        size: 1,
+        modified: 0,
+      ),
+      null,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          coversDirProvider.overrideWithValue(Directory('/nowhere')),
+          libraryRootsProvider.overrideWith(
+            (ref) => Stream.value([
+              const LibraryRoot(id: 1, location: '/lib', name: 'Comics'),
+            ]),
+          ),
+          libraryComicsProvider.overrideWithValue([
+            at('', 'Loose 01.cbr'),
+            at('DC', 'Batman 01.cbr'),
+            at('DC/Old', 'Batman 1940 01.cb7'),
+            at('DC/Old', 'Superman 01.cbz'),
+          ]),
+          libraryPrefsProvider.overrideWith(
+            () => LibraryPrefsNotifier((
+              view: LibraryView.folders,
+              layout: LibraryLayout.grid,
+            )),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: LibraryBrowser(onOpenFile: () {})),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _rightClick(tester, find.text('DC'));
+    await tester.pumpAndSettle();
+    expect(find.text('Convert 2 to CBZ'), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5)); // close the sheet
+    await tester.pumpAndSettle();
+
+    await _rightClick(tester, find.text('Comics')); // the breadcrumb
+    await tester.pumpAndSettle();
+    expect(find.text('4 comics · 0 read'), findsOneWidget);
+    expect(find.text('Convert 3 to CBZ'), findsOneWidget);
+  });
+
   for (final layout in LibraryLayout.values) {
     for (final (gesture, label) in [
       (_rightClick, 'right-click'),
@@ -131,6 +189,8 @@ void main() {
         await gesture(tester, find.text('Saga #1 (2012)').first);
         await tester.pumpAndSettle();
         expect(find.text('Mark as read'), findsOneWidget);
+        // A CBR on desktop (the test host) offers conversion.
+        expect(find.text('Convert to CBZ'), findsOneWidget);
       });
     }
   }
