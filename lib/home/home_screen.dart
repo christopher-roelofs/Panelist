@@ -16,10 +16,10 @@ import '../data/book_extensions.dart';
 import '../data/database.dart';
 import '../library/library_providers.dart';
 import '../library/library_scanner.dart';
-import '../library/library_settings_screen.dart';
 import '../library/library_view.dart';
 import '../platform/android_documents.dart';
 import '../reader/reader_screen.dart';
+import '../settings/settings_screen.dart';
 
 /// Opens [path] in the reader at its saved page, recording it in recents.
 Future<void> openInReader(
@@ -225,11 +225,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onPressed: _pickFolder,
                 ),
               IconButton(
-                tooltip: 'Library folders',
+                tooltip: 'Settings',
                 icon: const Icon(Icons.settings_outlined),
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const LibrarySettingsScreen(),
+                    builder: (_) => const SettingsScreen(),
                   ),
                 ),
               ),

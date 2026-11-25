@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'app/providers.dart';
+import 'app/theme.dart';
 import 'core/sources/archive_page_source.dart';
 import 'data/database.dart';
 import 'home/home_screen.dart';
@@ -27,6 +29,7 @@ Future<void> main(List<String> args) async {
   final db = AppDatabase();
   final defaults = await ReaderDefaultsNotifier.load(db);
   final libraryPrefs = await LibraryPrefsNotifier.load(db);
+  final appTheme = await AppThemeNotifier.load(db);
   final covers = Directory(
     p.join((await getApplicationSupportDirectory()).path, 'covers'),
   );
@@ -42,6 +45,7 @@ Future<void> main(List<String> args) async {
           () => LibraryPrefsNotifier(libraryPrefs),
         ),
         coversDirProvider.overrideWithValue(covers),
+        appThemeProvider.overrideWith(() => AppThemeNotifier(appTheme)),
       ],
       child: PanelistApp(initialPath: args.isEmpty ? null : args.first),
     ),
@@ -61,24 +65,32 @@ void _sizeImageCache() {
   cache.maximumSizeBytes = math.max(48 << 20, pageBytes * 6);
 }
 
-class PanelistApp extends StatelessWidget {
+class PanelistApp extends ConsumerWidget {
   const PanelistApp({super.key, this.initialPath});
 
   final String? initialPath;
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Panelist',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepOrange,
-          brightness: Brightness.dark,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(appThemeProvider);
+    return DynamicColorBuilder(
+      builder: (systemLight, systemDark) => MaterialApp(
+        title: 'Panelist',
+        debugShowCheckedModeBanner: false,
+        themeMode: themeModeOf(theme.mode),
+        theme: buildTheme(
+          buildColorScheme(theme.accent, Brightness.light, system: systemLight),
         ),
+        darkTheme: buildTheme(
+          buildColorScheme(
+            theme.accent,
+            Brightness.dark,
+            black: theme.mode == AppThemeMode.black,
+            system: systemDark,
+          ),
+        ),
+        home: _Launcher(initialPath: initialPath),
       ),
-      home: _Launcher(initialPath: initialPath),
     );
   }
 }

@@ -90,3 +90,9 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
   each scan.
 - Library follow-ups: watching folders for changes; folders of images as
   library items; mark as read/unread.
+- Themes (`lib/app/theme.dart`, Settings screen): System / Light / Dark /
+  Black (true black), and an accent (Wallpaper on Android 12+, Grey, Blue
+  (default), Teal, Green, Purple, Pink, Amber, Orange). Backgrounds always
+  come from a neutral grey scheme, so the accent never tints them; accents
+  use the `fidelity` variant so similar hues stay distinguishable. The
+  reader is always black.
