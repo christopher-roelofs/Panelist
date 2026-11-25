@@ -47,6 +47,37 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
 | M5 | Library: library folders, thumbnails, continue reading, Folders / Series / Publishers views | Home screen with Continue Reading |
 | Later | RTL manga, webtoon scroll, panel zoom, OPDS/Komga, Windows/macOS/iOS, AVIF/JXL | |
 
+## Distribution (before the first release)
+
+### Linux
+The release bundle (`build/linux/x64/release/bundle`) carries the app,
+Flutter engine, pdfium, sqlite and plugins, but uses the system's GTK 3,
+X11/Wayland, fonts and **libarchive** (CBR and most CBZ won't open without
+it), and needs **glibc 2.34+** (Ubuntu 22.04, Debian 12, Fedora 35 or
+newer).
+- Plan: **Flatpak** on the GNOME runtime (GTK and libarchive included;
+  works on any distro with Flatpak; Flathub for open-source apps).
+- Alternatives: AppImage (one file, bundles libarchive; build on an old
+  distro for glibc), or a tarball with libarchive added to `lib/`.
+
+### Windows
+1. `flutter create --platforms=windows .` to add `windows/`.
+2. Build in **GitHub Actions** (`windows-latest` has Visual Studio 2022);
+   Flutter can't cross-compile from Linux. Needs a GitHub remote.
+3. Ship **`archive.dll`** next to the exe (the loader already looks for
+   it): build libarchive with vcpkg in the same job, with zlib, bzip2, xz,
+   zstd, lz4 (all permissive; libarchive's own RAR reader, no unrar).
+   pdfium is bundled by pdfrx.
+4. Package: start with a zip of `build/windows/x64/runner/Release` plus
+   the MSVC runtime DLLs (`msvcp140.dll`, `vcruntime140*.dll`); then an
+   **Inno Setup** installer (Start menu, uninstaller, .cbz/.cbr/.pdf
+   "Open with"). MSIX (`msix` package) only if we go to the Store.
+5. Code signing, to avoid SmartScreen warnings: **SignPath Foundation**
+   (free for open source built in public CI), else Azure Trusted Signing
+   (~$10/month) or a certificate; unsigned is OK for early testing.
+6. Check on real Windows: drive-letter paths, folder picker, drag and
+   drop, full screen.
+
 ## Notes and known follow-ups
 - Archives other than ZIP are extracted sequentially to a per-process cache
   dir (`~/.cache/dev.panelist.panelist/extracted/book_<pid>_*`), removed on
