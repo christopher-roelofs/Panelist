@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../app/theme.dart';
+import '../library/comic_info_editor.dart';
 import '../library/library_providers.dart';
 import '../library/library_settings_screen.dart';
+import '../library/metron_lookup.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -80,6 +82,20 @@ class SettingsScreen extends ConsumerWidget {
               style: text.bodySmall,
             ),
           ),
+          if (canEditMetadata) ...[
+            heading('Comic details'),
+            ListTile(
+              leading: const Icon(Icons.travel_explore),
+              title: const Text('Metron API token'),
+              subtitle: Text(
+                ref.watch(metronTokenProvider).value == null
+                    ? 'Not set: needed to look up comic details on Metron'
+                    : 'Set',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => editMetronToken(context, ref),
+            ),
+          ],
           heading('Library'),
           ListTile(
             leading: const Icon(Icons.folder_outlined),

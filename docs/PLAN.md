@@ -184,3 +184,32 @@ newer).
   folder, the current folder, a publisher or series, "All …") open the same
   sheet on right-click / long-press. Converting can be stopped between
   comics.
+- Metron lookup (M6 step 4, desktop): API token (Bearer; Metron dropped
+  username/password) set in Settings → Comic details, stored in the
+  settings table. `MetronClient` spaces requests ~3 s apart (under the
+  burst limit), waits out 429s per Retry-After, caches per session.
+  Matching: a `[issue_id:N]` in Notes (MetronTagger's and ours) is used
+  directly; otherwise `issue/?series_name=&number=` and `chooseMatch`
+  (same normalised name and number; year within one of cover, store or
+  series start) must leave exactly one. Mapping follows MetronTagger
+  (Volume = series start year, credits by role, Web, GTIN, Notes line).
+  Editor: "Look up on Metron" fills the form to review. Sheets: "Look up on
+  Metron" for an issue; "Look up N on Metron" for groups/folders, which
+  converts CBR first, saves sure matches and lists the rest with
+  "Choose…". No word lists: `findIssue` tries the name as written, then
+  the same words written differently (`2000AD` → `2000 AD`, `A - B` → `A: B`;
+  still a sure match), then shorter names (trailing words dropped, the last
+  half of `A - B`), which only give a *likely* match for the user to
+  confirm, unless the series' `alt_names` on Metron include the comic's
+  name ("2000AD Prog" for "2000 AD"), which makes it sure (the details call
+  is needed to save anyway). At most 6 searches per comic. Fewer calls:
+  answers are cached on disk (`metron.json` in the app cache folder;
+  details 30 days, searches 1 day), and a name once matched (sure or
+  confirmed) remembers its Metron series, so later issues need one search
+  by `series_id`.
+  Title when Metron has no title of its own: all story titles joined with
+  "; " (decided). Step 5 (rename by template) should default to a template
+  without `{title}` (e.g. `{series} {number} ({year})`) and shorten
+  `{title}` when used (anthologies list one story per serial). Anthology titles (one story per
+  serial) are joined with "; " (titles contain commas). ComicVine stays
+  optional/later.

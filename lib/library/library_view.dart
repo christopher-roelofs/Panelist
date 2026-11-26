@@ -15,6 +15,7 @@ import 'library_model.dart';
 import 'library_providers.dart';
 import 'library_scanner.dart';
 import 'library_settings_screen.dart';
+import 'metron_lookup.dart';
 
 /// The home screen's scrolling body: [leading] slivers (Continue reading),
 /// then the library, browsable by folder, series or publisher. Back goes
@@ -249,6 +250,17 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                   unawaited(convertWithProgress(context, ref, [c]));
                 }
               : null,
+          onLookUp: isEditableComic(c.location)
+              ? () {
+                  Navigator.of(sheet).pop();
+                  unawaited(editComicInfo(context, c, lookUp: true));
+                }
+              : isConvertibleComic(c)
+              ? () {
+                  Navigator.of(sheet).pop();
+                  unawaited(tagWithProgress(context, ref, [c]));
+                }
+              : null,
         ),
       );
     }
@@ -262,6 +274,10 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
         onConvert: (comics) {
           Navigator.of(sheet).pop();
           unawaited(convertWithProgress(context, ref, comics));
+        },
+        onLookUp: (comics) {
+          Navigator.of(sheet).pop();
+          unawaited(tagWithProgress(context, ref, comics));
         },
         onEdit: canEditMetadata && item.field != null
             ? () {
@@ -838,9 +854,13 @@ class _DetailsSheet extends StatelessWidget {
     required this.onMark,
     required this.onEdit,
     required this.onConvert,
+    required this.onLookUp,
   });
 
   final LibraryComic comic;
+
+  /// Looks the comic up on Metron; null where it can't be.
+  final VoidCallback? onLookUp;
   final _OnMark onMark;
 
   /// Converts the comic to CBZ; null where it can't be.
@@ -894,6 +914,12 @@ class _DetailsSheet extends StatelessWidget {
                       onPressed: onEdit,
                       icon: const Icon(Icons.edit_outlined),
                       label: const Text('Edit details'),
+                    ),
+                  if (onLookUp != null)
+                    OutlinedButton.icon(
+                      onPressed: onLookUp,
+                      icon: const Icon(Icons.travel_explore),
+                      label: const Text('Look up on Metron'),
                     ),
                 ],
               ),
@@ -1021,9 +1047,13 @@ class _GroupSheet extends StatelessWidget {
     required this.onMark,
     required this.onEdit,
     required this.onConvert,
+    required this.onLookUp,
   });
 
   final _Item item;
+
+  /// Looks the given members up on Metron.
+  final void Function(List<LibraryComic> comics) onLookUp;
   final _OnMark onMark;
 
   /// Converts the given members to CBZ.
@@ -1043,6 +1073,16 @@ class _GroupSheet extends StatelessWidget {
         .length;
     final n = item.members.length;
     final convertible = item.members.where(isConvertibleComic).toList();
+    // CBZ (by name, to stay cheap) and anything convertible to it.
+    final taggable = canEditMetadata
+        ? item.members
+              .where(
+                (c) =>
+                    isConvertibleComic(c) ||
+                    c.entry.fileName.toLowerCase().endsWith('.cbz'),
+              )
+              .toList()
+        : const <LibraryComic>[];
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -1069,6 +1109,16 @@ class _GroupSheet extends StatelessWidget {
                     onPressed: onEdit,
                     icon: const Icon(Icons.edit_outlined),
                     label: Text('Edit ${item.field!.$2.toLowerCase()}'),
+                  ),
+                if (taggable.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: () => onLookUp(taggable),
+                    icon: const Icon(Icons.travel_explore),
+                    label: Text(
+                      taggable.length == 1
+                          ? 'Look up 1 on Metron'
+                          : 'Look up ${taggable.length} on Metron',
+                    ),
                   ),
                 if (convertible.isNotEmpty)
                   OutlinedButton.icon(

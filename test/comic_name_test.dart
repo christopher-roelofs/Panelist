@@ -53,6 +53,12 @@ void main() {
       2022,
     ));
     expect(parse('2000 AD', folder: true), ('2000 AD', null, null));
+    // Words are kept as written; Metron lookup works out what fits.
+    expect(parse('2000AD prog 2509 (2026) (4320p juvecube).cbz'), (
+      '2000AD prog',
+      '2509',
+      2026,
+    ));
   });
 
   test('nothing but a number', () {
