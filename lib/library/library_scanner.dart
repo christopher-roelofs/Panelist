@@ -151,6 +151,10 @@ class LibraryScanner extends Notifier<ScanStatus> {
   Future<void>? _running;
   bool _again = false;
 
+  /// Comics with a problem already tried in this run (ones from an earlier
+  /// run are tried once more).
+  final _retried = <String>{};
+
   @override
   ScanStatus build() => const ScanStatus();
 
@@ -219,7 +223,12 @@ class LibraryScanner extends Notifier<ScanStatus> {
     final pending = [
       for (final root in await db.roots())
         for (final e in await db.entriesOf(root.id))
-          if (e.bookId == null && e.error == null) e,
+          // New ones, and ones that had a problem get one more try per
+          // run: Panelist may read them now (an update, libarchive
+          // installed). Some had a problem after their ID was read.
+          if ((e.bookId == null && e.error == null) ||
+              (e.error != null && _retried.add(e.location)))
+            e,
     ];
     if (!ref.mounted) return;
     final read = ref.read(comicReaderProvider);
@@ -249,7 +258,10 @@ class LibraryScanner extends Notifier<ScanStatus> {
             error: Value(c.problem),
           ),
         );
+        // Tried in this run: not again until the next.
+        if (c.problem != null) _retried.add(e.location);
       } on Object catch (error) {
+        _retried.add(e.location);
         await db.updateEntry(
           e.location,
           LibraryEntriesCompanion(error: Value('$error')),

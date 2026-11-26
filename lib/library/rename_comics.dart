@@ -288,7 +288,8 @@ Future<String> _savedTemplate(WidgetRef ref) async =>
     await ref.read(databaseProvider).setting(renameTemplateKey) ??
     organizeLayouts.first.template;
 
-/// Shows where [comics] would go, then renames them.
+/// Shows where [comics] would go (a layout or template), then renames or
+/// moves them: Organize… on a comic, series, publisher or folder.
 Future<void> renameWithPreview(
   BuildContext context,
   WidgetRef ref,
@@ -321,9 +322,13 @@ Future<void> _showRename(
   );
   if (result == null) return;
   unawaited(ref.read(libraryScanProvider.notifier).scan());
+  // The template used (saved by the dialog): with folders, comics moved.
+  final used = await _savedTemplate(ref);
   messenger.showSnackBar(
     SnackBar(
-      content: Text(describeRenameResult(result, organize: organize)),
+      content: Text(
+        describeRenameResult(result, organize: organize || used.contains('/')),
+      ),
       duration: Duration(seconds: result.failed > 0 ? 10 : 4),
     ),
   );
@@ -509,8 +514,8 @@ class _RenameDialogState extends ConsumerState<_RenameDialog> {
         widget.organize
             ? 'Organize library'
             : n == 1
-            ? 'Rename comic'
-            : 'Rename $n comics',
+            ? 'Organize comic'
+            : 'Organize $n comics',
       ),
       content: SizedBox(
         width: 680,

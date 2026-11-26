@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:drift/drift.dart' show driftRuntimeOptions;
+import 'package:drift/drift.dart' show Value, driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -259,6 +259,46 @@ void main() {
       return (await db.entriesOf(1))
         ..sort((a, b) => a.location.compareTo(b.location));
     }
+
+    test('a problem from an earlier run is tried once more', () async {
+      put('fixed.cbz');
+      await db.addRoot(p.join(dir.path, 'comics'), 'comics');
+      await scan();
+      // As an earlier run left it: read, with a problem.
+      final location = p.join(dir.path, 'comics', 'fixed.cbz');
+      await db.updateEntry(
+        location,
+        const LibraryEntriesCompanion(error: Value('could not unpack')),
+      );
+      // A new run (a new scanner): tried again, and now it reads.
+      final next = ProviderContainer(
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          coversDirProvider.overrideWithValue(
+            Directory(p.join(dir.path, '.covers')),
+          ),
+          comicReaderProvider.overrideWithValue((location) async {
+            opened.add(p.basename(location));
+            return (
+              bookId: 'id-fixed',
+              pageCount: 20,
+              info: null,
+              cover: null,
+              problem: null,
+            );
+          }),
+        ],
+      );
+      addTearDown(next.dispose);
+      opened.clear();
+      await next.read(libraryScanProvider.notifier).scan();
+      expect(opened, ['fixed.cbz']);
+      expect((await db.entryAt(location))!.error, isNull);
+      // Once per run.
+      opened.clear();
+      await next.read(libraryScanProvider.notifier).scan();
+      expect(opened, isEmpty);
+    });
 
     test(
       'finds comics, skips hidden and non-comics, rescans only changes',

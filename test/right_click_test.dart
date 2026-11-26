@@ -87,6 +87,7 @@ void main() {
       expect(find.text('Mark all as read'), findsOneWidget);
       // Desktop only (tests run on the host, which is desktop).
       expect(find.text(button), findsOneWidget);
+      expect(find.text('Organize 1…'), findsOneWidget);
       await tester.tap(find.text(button));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);

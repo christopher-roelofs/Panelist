@@ -90,7 +90,17 @@ class LibArchive {
           .lookupFunction<
             Int Function(Pointer<LaEntry>),
             int Function(Pointer<LaEntry>)
-          >('archive_entry_is_encrypted');
+          >('archive_entry_is_encrypted'),
+      _entrySize = lib
+          .lookupFunction<
+            Int64 Function(Pointer<LaEntry>),
+            int Function(Pointer<LaEntry>)
+          >('archive_entry_size'),
+      _entrySizeIsSet = lib
+          .lookupFunction<
+            Int Function(Pointer<LaEntry>),
+            int Function(Pointer<LaEntry>)
+          >('archive_entry_size_is_set');
 
   static LibArchive? _instance;
 
@@ -131,6 +141,8 @@ class LibArchive {
   final Pointer<Utf8> Function(Pointer<LaEntry>) _entryPathname;
   final int Function(Pointer<LaEntry>) _entryFiletype;
   final int Function(Pointer<LaEntry>) _entryIsEncrypted;
+  final int Function(Pointer<LaEntry>) _entrySize;
+  final int Function(Pointer<LaEntry>) _entrySizeIsSet;
 
   String? entryPath(Pointer<LaEntry> e) {
     var s = _entryPathnameUtf8(e);
@@ -142,6 +154,10 @@ class LibArchive {
       (_entryFiletype(e) & _aeIfmt) == _aeIfreg;
 
   bool entryIsEncrypted(Pointer<LaEntry> e) => _entryIsEncrypted(e) > 0;
+
+  /// The entry's unpacked size, or null if the archive doesn't say.
+  int? entrySize(Pointer<LaEntry> e) =>
+      _entrySizeIsSet(e) != 0 ? _entrySize(e) : null;
 
   String error(Pointer<LaArchive> a) {
     final s = errorString(a);
@@ -224,15 +240,31 @@ class ArchiveReader {
     bool Function()? shouldStop,
   }) {
     final buf = _buffer ??= malloc<Uint8>(_bufferSize);
+    final size = _la.entrySize(_entry.value);
+    var delivered = 0;
     while (true) {
       if (shouldStop?.call() ?? false) return false;
       final n = _la.readData(_a, buf.cast(), _bufferSize);
       if (n == 0) return true;
       if (n < 0) {
         if (n == archiveRetry || n == archiveWarn) continue;
+        // libarchive's RAR 5 reader can miss the end of an entry and read
+        // one block past it ("Unsupported block header size"), after the
+        // whole entry has come out (files by recent WinRAR versions;
+        // checked against unrar byte for byte). The data is complete and
+        // the next header is still readable, so take it. (It reports this
+        // as fatal; if the archive really were unusable, the next header
+        // fails as usual.)
+        if ((n == archiveFailed || n == archiveFatal) &&
+            size != null &&
+            size > 0 &&
+            delivered == size) {
+          return true;
+        }
         throw LibArchiveException(_la.error(_a));
       }
       sink(buf, n);
+      delivered += n;
     }
   }
 

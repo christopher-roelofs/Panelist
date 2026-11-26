@@ -1013,8 +1013,8 @@ class _DetailsSheet extends StatelessWidget {
                   if (onRename != null)
                     OutlinedButton.icon(
                       onPressed: onRename,
-                      icon: const Icon(Icons.drive_file_rename_outline),
-                      label: const Text('Rename…'),
+                      icon: const Icon(Icons.account_tree_outlined),
+                      label: const Text('Organize…'),
                     ),
                 ],
               ),
@@ -1232,11 +1232,11 @@ class _GroupSheet extends StatelessWidget {
                 if (renamable.isNotEmpty)
                   OutlinedButton.icon(
                     onPressed: () => onRename(renamable),
-                    icon: const Icon(Icons.drive_file_rename_outline),
+                    icon: const Icon(Icons.account_tree_outlined),
                     label: Text(
                       renamable.length == 1
-                          ? 'Rename 1…'
-                          : 'Rename ${renamable.length}…',
+                          ? 'Organize 1…'
+                          : 'Organize ${renamable.length}…',
                     ),
                   ),
                 if (convertible.isNotEmpty)

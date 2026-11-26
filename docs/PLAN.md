@@ -153,6 +153,13 @@ newer).
   dir (`~/.cache/dev.panelist.panelist/extracted/book_<pid>_*`), removed on
   close and swept at startup if the owning process is gone. Solid RAR is
   decompressed twice (list pass + extract pass).
+- libarchive's RAR 5 reader (up to 3.8.11 at least) misses the end of an
+  entry in some files by recent WinRAR and reads one block past it
+  ("Unsupported block header size (was 3, max is 2)"), after the whole
+  entry has come out; `ArchiveReader.readData` takes an entry whose full
+  size arrived before that error (checked against unrar byte for byte on
+  Dick Tracy - Veterans Day Special). Comics with a problem from an
+  earlier run are retried once per run.
 - Android: libarchive (+ static liblzma) is built from pinned, hash-checked
   release tarballs by CMake via Gradle (`android/app/src/main/cpp`).
 - Android documents are `content://` URIs (stored as the recent's path, with
