@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import '../app/providers.dart';
 import '../core/sources/open_source.dart';
 import '../core/sources/page_source.dart';
+import '../core/util/file_names.dart';
 import '../data/database.dart';
 import '../library/library_model.dart';
 import '../library/library_providers.dart';
@@ -239,7 +240,7 @@ class RemoteComicsNotifier extends Notifier<RemoteComics> {
     if (!ref.mounted) return;
     var fetched = 0;
     for (final c in comics) {
-      final f = File(p.join(dir.path, '${c.id}.png'));
+      final f = File(p.join(dir.path, '${idFileName(c.id)}.png'));
       if (f.existsSync()) continue;
       try {
         await f.writeAsBytes(await client.cover(c.id));
@@ -338,7 +339,7 @@ class Downloads extends Notifier<Map<String, File>> {
             .whereType<File>()
             .where((f) => !f.path.endsWith('.part'))
             .firstOrNull;
-        if (file != null) found[p.basename(d.path)] = file;
+        if (file != null) found[idFromFileName(p.basename(d.path))] = file;
       }
     } on FileSystemException {
       // None yet.
@@ -356,7 +357,9 @@ class Downloads extends Notifier<Map<String, File>> {
     await ref.read(remoteLibrariesProvider.future);
     final client = ref.read(shareClientProvider(library));
     if (client == null) throw const ShareException('Not paired');
-    final to = File(p.join(_dir.path, comic.id, comic.fileName));
+    final to = File(
+      p.join(_dir.path, idFileName(comic.id), localFileName(comic.fileName)),
+    );
     await client.download(
       comic.id,
       to,
@@ -368,7 +371,7 @@ class Downloads extends Notifier<Map<String, File>> {
   }
 
   Future<void> remove(String bookId) async {
-    final dir = Directory(p.join(_dir.path, bookId));
+    final dir = Directory(p.join(_dir.path, idFileName(bookId)));
     if (dir.existsSync()) await dir.delete(recursive: true);
     state = {...state}..remove(bookId);
   }

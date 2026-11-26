@@ -11,6 +11,7 @@ import '../core/imaging/thumbnail.dart';
 import '../core/metadata/comic_info.dart';
 import '../core/sources/open_source.dart';
 import '../core/sources/page_source.dart';
+import '../core/util/file_names.dart';
 import '../data/database.dart';
 import '../platform/android_documents.dart';
 
@@ -228,7 +229,8 @@ class LibraryScanner extends Notifier<ScanStatus> {
       try {
         final c = await read(e.location);
         if (c.cover case final png?) {
-          await File(p.join(covers.path, '${c.bookId}.png')).writeAsBytes(png);
+          await File(p.join(covers.path, '${idFileName(c.bookId)}.png'))
+              .writeAsBytes(png);
         }
         final info = c.info;
         await db.updateEntry(
@@ -260,7 +262,7 @@ class LibraryScanner extends Notifier<ScanStatus> {
     final used = {
       for (final root in await db.roots())
         for (final e in await db.entriesOf(root.id))
-          if (e.bookId case final id?) '$id.png',
+          if (e.bookId case final id?) '${idFileName(id)}.png',
     };
     await for (final f in covers.list()) {
       if (f is File && !used.contains(p.basename(f.path))) {

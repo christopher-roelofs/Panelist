@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../app/providers.dart';
 import '../core/sources/open_source.dart';
+import '../core/util/file_names.dart';
 import '../data/database.dart';
 import '../reader/open_book.dart';
 import '../share/remote_library.dart';
@@ -736,7 +737,12 @@ class LibraryCover extends ConsumerWidget {
       child: id == null
           ? placeholder()
           : Image.file(
-              File(p.join(ref.watch(coversDirProvider).path, '$id.png')),
+              File(
+                p.join(
+                  ref.watch(coversDirProvider).path,
+                  '${idFileName(id)}.png',
+                ),
+              ),
               fit: BoxFit.cover,
               cacheWidth: 320,
               gaplessPlayback: true,

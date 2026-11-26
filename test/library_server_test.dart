@@ -318,6 +318,17 @@ void main() {
     expect((await db.book('saga1'))!.currentPage, 1);
   });
 
+  test('answers on IPv4 and IPv6', () async {
+    final port = await server.start(port: 0);
+    final client = HttpClient();
+    addTearDown(client.close);
+    for (final host in ['127.0.0.1', '::1']) {
+      final res = await (await client.get(host, port, '$apiPath/info')).close();
+      expect(res.statusCode, 200, reason: host);
+      await res.drain<void>();
+    }
+  });
+
   test('serves over HTTP on a free port', () async {
     final port = await server.start(port: 0);
     final client = HttpClient();

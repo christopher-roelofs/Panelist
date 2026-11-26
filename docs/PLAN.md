@@ -340,7 +340,8 @@ newer).
 - Windows build (2026-11-26): `windows/` added; `.github/workflows/
   windows.yml` builds on windows-latest, adds libarchive from vcpkg
   (`archive.dll` + zlib, bzip2, xz, zstd, lz4 DLLs) and the MSVC runtime,
-  starts the app for 10 s, and uploads `panelist-windows-x64.zip`. The
+  starts the app for 10 s, and uploads the app folder as the
+  `panelist-windows-x64` artifact (GitHub zips it once). The
   runner implements `panelist/window` (borderless full screen, title).
   Done of the list below: (1) "close it first" for locked files
   (`describeFileError`), (2) Recycle Bin through PowerShell/.NET, never on

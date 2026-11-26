@@ -12,6 +12,7 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 
 import '../core/sources/page_source.dart';
+import '../core/util/file_names.dart';
 import '../data/database.dart';
 import 'share_protocol.dart';
 
@@ -93,14 +94,32 @@ class LibraryServer {
         .addHandler(router.call);
     for (var p = port; p < port + 20; p++) {
       try {
-        _http = await shelf_io.serve(handler, InternetAddress.anyIPv4, p);
-        _http!.autoCompress = true;
-        return _http!.port;
+        // IPv6 and IPv4 both: devices may find this computer by either
+        // (Windows' discovery can return only IPv6).
+        final http = await _bind(p);
+        http.autoCompress = true;
+        shelf_io.serveRequests(http, handler);
+        _http = http;
+        return http.port;
       } on SocketException {
         // Taken: try the next one.
       }
     }
     throw const SocketException('No free port to share the library on');
+  }
+
+  static Future<HttpServer> _bind(int port) async {
+    try {
+      return await HttpServer.bind(
+        InternetAddress.anyIPv6,
+        port,
+        v6Only: false,
+      );
+    } on SocketException catch (e) {
+      // No IPv6 on this computer; a port in use is the caller's to handle.
+      if (const {48, 98, 10048}.contains(e.osError?.errorCode)) rethrow;
+      return HttpServer.bind(InternetAddress.anyIPv4, port);
+    }
   }
 
   Future<void> stop() async {
@@ -223,7 +242,7 @@ class LibraryServer {
           .firstOrNull;
 
   Future<Response> _cover(Request request, String id) async {
-    final f = File(p.join(coversDir.path, '$id.png'));
+    final f = File(p.join(coversDir.path, '${idFileName(id)}.png'));
     if (!p.isWithin(coversDir.path, f.path) || !f.existsSync()) {
       return Response.notFound('No cover');
     }
