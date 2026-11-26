@@ -104,12 +104,18 @@ class PanelistApp extends ConsumerWidget {
         debugShowCheckedModeBanner: false,
         themeMode: themeModeOf(theme.mode),
         theme: buildTheme(
-          buildColorScheme(theme.accent, Brightness.light, system: systemLight),
+          buildColorScheme(
+            theme.accent,
+            Brightness.light,
+            background: theme.background,
+            system: systemLight,
+          ),
         ),
         darkTheme: buildTheme(
           buildColorScheme(
             theme.accent,
             Brightness.dark,
+            background: theme.background,
             black: theme.mode == AppThemeMode.black,
             system: systemDark,
           ),

@@ -67,22 +67,62 @@ class SettingsScreen extends ConsumerWidget {
                 runSpacing: 8,
                 children: [
                   for (final a in AppAccent.values)
-                    if (a != AppAccent.wallpaper || dark != null)
+                    if (a != AppAccent.system || dark != null)
                       _Swatch(
-                        accent: a,
+                        label: a.label,
                         color: a.seed ?? dark!.primary,
                         selected: theme.accent == a,
+                        icon: a == AppAccent.system
+                            ? Icons.palette_outlined
+                            : null,
                         onTap: () => notifier.setAccent(a),
                       ),
                 ],
               ),
             ),
           ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text('Background', style: text.bodyMedium),
+          ),
+          const SizedBox(height: 12),
+          DynamicColorBuilder(
+            builder: (light, dark) {
+              final brightness = Theme.of(context).brightness;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 8,
+                  children: [
+                    for (final b in AppBackground.values)
+                      _Swatch(
+                        label: b.label,
+                        // The background itself, as it would look now.
+                        color: buildColorScheme(
+                          theme.accent,
+                          brightness,
+                          background: b,
+                          system: brightness == Brightness.dark ? dark : light,
+                        ).surfaceContainerHigh,
+                        selected: theme.background == b,
+                        outlined: true,
+                        onTap: () => notifier.setBackground(b),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: Text(
-              'Comics are always shown on black.',
+              theme.mode == AppThemeMode.black
+                  ? 'The Black theme keeps backgrounds black. Comics are '
+                        'always shown on black.'
+                  : 'Comics are always shown on black.',
               style: text.bodySmall,
             ),
           ),
@@ -155,16 +195,22 @@ class SettingsScreen extends ConsumerWidget {
 
 class _Swatch extends StatelessWidget {
   const _Swatch({
-    required this.accent,
+    required this.label,
     required this.color,
     required this.selected,
     required this.onTap,
+    this.icon,
+    this.outlined = false,
   });
 
-  final AppAccent accent;
+  final String label;
   final Color color;
   final bool selected;
   final VoidCallback onTap;
+  final IconData? icon;
+
+  /// A thin ring when not selected, for colours close to the page's own.
+  final bool outlined;
 
   @override
   Widget build(BuildContext context) {
@@ -172,7 +218,7 @@ class _Swatch extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      label: accent.label,
+      label: label,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -189,21 +235,29 @@ class _Swatch extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: color,
                     border: Border.all(
-                      color: selected ? scheme.onSurface : Colors.transparent,
-                      width: 3,
+                      color: selected
+                          ? scheme.onSurface
+                          : outlined
+                          ? scheme.outlineVariant
+                          : Colors.transparent,
+                      width: selected || !outlined ? 3 : 1,
                     ),
                   ),
                   child: selected
-                      ? const Icon(Icons.check, color: Colors.white)
-                      : accent == AppAccent.wallpaper
-                      ? const Icon(Icons.wallpaper, color: Colors.white)
+                      ? Icon(
+                          Icons.check,
+                          color:
+                              ThemeData.estimateBrightnessForColor(color) ==
+                                  Brightness.dark
+                              ? Colors.white
+                              : Colors.black,
+                        )
+                      : icon != null
+                      ? Icon(icon, color: Colors.white)
                       : null,
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  accent.label,
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
+                Text(label, style: Theme.of(context).textTheme.labelSmall),
               ],
             ),
           ),

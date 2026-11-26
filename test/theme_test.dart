@@ -51,26 +51,71 @@ void main() {
     }
   });
 
+  test('a background colour tints the surfaces, text stays readable', () {
+    double contrast(Color a, Color b) {
+      final (x, y) = (a.computeLuminance(), b.computeLuminance());
+      return (x > y ? x + 0.05 : y + 0.05) / (x > y ? y + 0.05 : x + 0.05);
+    }
+
+    for (final bg in AppBackground.values) {
+      for (final b in Brightness.values) {
+        final s = buildColorScheme(AppAccent.blue, b, background: bg);
+        if (bg == AppBackground.grey) {
+          expect(tint(s.surfaceContainer), lessThanOrEqualTo(2));
+        } else {
+          expect(tint(s.surfaceContainer), greaterThan(4), reason: '$bg $b');
+        }
+        expect(contrast(s.onSurface, s.surface), greaterThan(7));
+        expect(
+          contrast(s.onSurfaceVariant, s.surfaceContainerHigh),
+          greaterThan(4.5),
+        );
+        // Buttons keep the accent, not the background's colour.
+        expect(s.primary, buildColorScheme(AppAccent.blue, b).primary);
+      }
+    }
+    // Grey accent: "Accent" has no colour to tint with.
+    expect(
+      tint(
+        buildColorScheme(
+          AppAccent.grey,
+          Brightness.dark,
+          background: AppBackground.accent,
+        ).surfaceContainer,
+      ),
+      lessThanOrEqualTo(2),
+    );
+    expect(
+      buildColorScheme(
+        AppAccent.blue,
+        Brightness.dark,
+        background: AppBackground.rose,
+        black: true,
+      ).surface,
+      Colors.black,
+    );
+  });
+
   test('black mode uses true black', () {
     final s = buildColorScheme(AppAccent.blue, Brightness.dark, black: true);
     expect(s.surface, Colors.black);
   });
 
-  test('wallpaper colours are used when available, else slate', () {
+  test('system colours are used when available, else blue', () {
     final system = ColorScheme.fromSeed(
       seedColor: Colors.green,
       brightness: Brightness.dark,
     );
     expect(
       buildColorScheme(
-        AppAccent.wallpaper,
+        AppAccent.system,
         Brightness.dark,
         system: system,
       ).primary,
       system.primary,
     );
     expect(
-      buildColorScheme(AppAccent.wallpaper, Brightness.dark).primary,
+      buildColorScheme(AppAccent.system, Brightness.dark).primary,
       buildColorScheme(AppAccent.blue, Brightness.dark).primary,
     );
   });
@@ -86,11 +131,13 @@ void main() {
     addTearDown(c.dispose);
     c.read(appThemeProvider.notifier)
       ..setMode(AppThemeMode.black)
-      ..setAccent(AppAccent.teal);
+      ..setAccent(AppAccent.teal)
+      ..setBackground(AppBackground.warm);
     await Future<void>.delayed(Duration.zero);
     expect(await AppThemeNotifier.load(db), (
       mode: AppThemeMode.black,
       accent: AppAccent.teal,
+      background: AppBackground.warm,
     ));
   });
 }

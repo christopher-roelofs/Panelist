@@ -9,10 +9,11 @@ import 'providers.dart';
 /// Light/dark choice. [black] is dark with true-black backgrounds (OLED).
 enum AppThemeMode { system, light, dark, black }
 
-/// Accent colours. [wallpaper] uses the Android 12+ system palette and
+/// Accent colours. [system] uses the system's colour (Android 12+ from the
+/// wallpaper, the accent colour on Windows and macOS) and
 /// falls back to [blue] where there isn't one; [grey] has no colour at all.
 enum AppAccent {
-  wallpaper('Wallpaper', null),
+  system('System', null),
   grey('Grey', Color(0xFF808080)),
   blue('Blue', Color(0xFF2F6FED)),
   teal('Teal', Color(0xFF00897B)),
@@ -28,9 +29,34 @@ enum AppAccent {
   final Color? seed;
 }
 
-typedef AppTheme = ({AppThemeMode mode, AppAccent accent});
+/// Background colours: [grey] is neutral, [accent] a tint of the accent
+/// colour, the rest a fixed tint whatever the accent. Black mode stays
+/// black.
+enum AppBackground {
+  grey('Grey', null),
+  accent('Accent', null),
+  warm('Warm', Color(0xFFC08040)),
+  cool('Cool', Color(0xFF4070C0)),
+  green('Green', Color(0xFF4C8C5A)),
+  rose('Rose', Color(0xFFC0607A));
 
-const defaultAppTheme = (mode: AppThemeMode.dark, accent: AppAccent.blue);
+  const AppBackground(this.label, this.seed);
+
+  final String label;
+  final Color? seed;
+}
+
+typedef AppTheme = ({
+  AppThemeMode mode,
+  AppAccent accent,
+  AppBackground background,
+});
+
+const AppTheme defaultAppTheme = (
+  mode: AppThemeMode.dark,
+  accent: AppAccent.blue,
+  background: AppBackground.grey,
+);
 
 final appThemeProvider = NotifierProvider<AppThemeNotifier, AppTheme>(
   AppThemeNotifier.new,
@@ -41,6 +67,7 @@ class AppThemeNotifier extends Notifier<AppTheme> {
 
   static const _modeKey = 'theme.mode';
   static const _accentKey = 'theme.accent';
+  static const _backgroundKey = 'theme.background';
 
   static Future<AppTheme> load(AppDatabase db) async {
     T pick<T extends Enum>(List<T> values, String? name, T fallback) =>
@@ -56,6 +83,11 @@ class AppThemeNotifier extends Notifier<AppTheme> {
         await db.setting(_accentKey),
         defaultAppTheme.accent,
       ),
+      background: pick(
+        AppBackground.values,
+        await db.setting(_backgroundKey),
+        defaultAppTheme.background,
+      ),
     );
   }
 
@@ -65,13 +97,20 @@ class AppThemeNotifier extends Notifier<AppTheme> {
   AppTheme build() => _initial;
 
   void setMode(AppThemeMode mode) {
-    state = (mode: mode, accent: state.accent);
+    state = (mode: mode, accent: state.accent, background: state.background);
     unawaited(ref.read(databaseProvider).setSetting(_modeKey, mode.name));
   }
 
   void setAccent(AppAccent accent) {
-    state = (mode: state.mode, accent: accent);
+    state = (mode: state.mode, accent: accent, background: state.background);
     unawaited(ref.read(databaseProvider).setSetting(_accentKey, accent.name));
+  }
+
+  void setBackground(AppBackground background) {
+    state = (mode: state.mode, accent: state.accent, background: background);
+    unawaited(
+      ref.read(databaseProvider).setSetting(_backgroundKey, background.name),
+    );
   }
 }
 
@@ -81,19 +120,20 @@ ThemeMode themeModeOf(AppThemeMode mode) => switch (mode) {
   AppThemeMode.dark || AppThemeMode.black => ThemeMode.dark,
 };
 
-/// A colour scheme with the accent's colours on buttons and highlights but
-/// neutral grey backgrounds (Material's default tints every surface with the
-/// accent, which turns a warm accent brown).
+/// A colour scheme with the accent's colours on buttons and highlights and
+/// [background]'s on surfaces: neutral grey by default (Material's default
+/// tints every surface with the accent, which turns a warm accent brown).
 ///
-/// [system] is the wallpaper palette, used for [AppAccent.wallpaper].
+/// [system] is the system's palette, used for [AppAccent.system].
 ColorScheme buildColorScheme(
   AppAccent accent,
   Brightness brightness, {
+  AppBackground background = AppBackground.grey,
   bool black = false,
   ColorScheme? system,
 }) {
   final accented =
-      (accent == AppAccent.wallpaper ? system : null) ??
+      (accent == AppAccent.system ? system : null) ??
       ColorScheme.fromSeed(
         seedColor: accent.seed ?? AppAccent.blue.seed!,
         brightness: brightness,
@@ -103,10 +143,18 @@ ColorScheme buildColorScheme(
             ? DynamicSchemeVariant.monochrome
             : DynamicSchemeVariant.fidelity,
       );
+  final tint = switch (background) {
+    AppBackground.grey => null,
+    AppBackground.accent => accent == AppAccent.grey ? null : accented.primary,
+    _ => background.seed,
+  };
   final neutral = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF808080),
+    seedColor: tint ?? const Color(0xFF808080),
     brightness: brightness,
-    dynamicSchemeVariant: DynamicSchemeVariant.monochrome,
+    // A visible tint, still quiet enough to read on.
+    dynamicSchemeVariant: tint == null
+        ? DynamicSchemeVariant.monochrome
+        : DynamicSchemeVariant.vibrant,
   );
   var scheme = accented.copyWith(
     surface: neutral.surface,
