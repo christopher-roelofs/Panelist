@@ -214,6 +214,63 @@ void main() {
     expect(file.readAsBytesSync(), File(cbz).readAsBytesSync());
   });
 
+  test('downloads go into the library folder, in the same folders', () async {
+    final (lib, client) = await pairDevice();
+    final comic = (await client.library())!.comics.single;
+    client.close();
+    final library = Directory(p.join(dir.path, 'my-comics'))..createSync();
+    await device.addRoot(library.path, 'My comics');
+    final container = ProviderContainer(
+      overrides: [
+        databaseProvider.overrideWithValue(device),
+        coversDirProvider.overrideWithValue(
+          Directory(p.join(dir.path, 'covers3')),
+        ),
+        shareDirsProvider.overrideWithValue((
+          cache: Directory(p.join(dir.path, 'cache3')),
+          downloads: Directory(p.join(dir.path, 'downloads3')),
+        )),
+      ],
+    );
+    addTearDown(container.dispose);
+    final libs = container.listen(remoteLibrariesProvider, (_, _) {});
+    addTearDown(libs.close);
+    final keep = container.listen(downloadsProvider, (_, _) {});
+    addTearDown(keep.close);
+    final file = await container
+        .read(downloadsProvider.notifier)
+        .download(lib.id, comic);
+    expect(
+      file.path,
+      p.joinAll([
+        library.path,
+        ...comic.folder.split('/').where((f) => f.isNotEmpty),
+        comic.fileName,
+      ]),
+    );
+    expect(file.readAsBytesSync(), File(cbz).readAsBytesSync());
+    expect(
+      container.read(downloadsProvider.notifier).removable(comic.id),
+      isFalse,
+    );
+    // Another file by that name already there: left alone.
+    await expectLater(
+      container.read(downloadsProvider.notifier).download(lib.id, comic),
+      throwsA(isA<ShareException>()),
+    );
+    expect(file.readAsBytesSync(), File(cbz).readAsBytesSync());
+    // The download started a scan, which adds it to this device's library.
+    final scan = container.listen(libraryScanProvider, (_, _) {});
+    addTearDown(scan.close);
+    await container.read(libraryScanProvider.notifier).scan();
+    expect(
+      (await device.entriesOf((await device.roots()).single.id))
+          .single
+          .location,
+      file.path,
+    );
+  });
+
   test('download all: a file this device can’t write is reported', () async {
     final (lib, client) = await pairDevice();
     final comics = (await client.library())!.comics;

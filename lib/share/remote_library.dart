@@ -329,9 +329,15 @@ final downloadsProvider = NotifierProvider<Downloads, Map<String, File>>(
 class Downloads extends Notifier<Map<String, File>> {
   Directory get _dir => ref.read(shareDirsProvider).downloads;
 
+  /// The books with a copy on this device: downloaded, or the same book in
+  /// one of its library folders (book IDs come from the contents).
   @override
   Map<String, File> build() {
-    final found = <String, File>{};
+    final found = <String, File>{
+      for (final c in ref.watch(libraryComicsProvider))
+        if (c.entry.bookId case final id? when !c.location.contains('://'))
+          id: File(c.location),
+    };
     try {
       for (final d in _dir.listSync().whereType<Directory>()) {
         final file = d
@@ -339,12 +345,41 @@ class Downloads extends Notifier<Map<String, File>> {
             .whereType<File>()
             .where((f) => !f.path.endsWith('.part'))
             .firstOrNull;
-        if (file != null) found[idFromFileName(p.basename(d.path))] = file;
+        if (file != null) {
+          found.putIfAbsent(idFromFileName(p.basename(d.path)), () => file);
+        }
       }
     } on FileSystemException {
       // None yet.
     }
     return found;
+  }
+
+  /// Whether [bookId]'s copy is a download [remove] can delete, not a comic
+  /// in a library folder.
+  bool removable(String bookId) =>
+      state[bookId]?.path.startsWith(_dir.path) ?? false;
+
+  /// Where [comic] goes: this device's (first) library folder, in the same
+  /// folders as on the computer, so it joins the library; without a library
+  /// folder it can write to (Android's for now), the app's own storage.
+  Future<File> _target(RemoteComic comic) async {
+    final root = (await ref.read(databaseProvider).roots())
+        .where((r) => !r.location.contains('://'))
+        .firstOrNull;
+    if (root == null) {
+      return File(
+        p.join(_dir.path, idFileName(comic.id), localFileName(comic.fileName)),
+      );
+    }
+    return File(
+      p.joinAll([
+        root.location,
+        for (final f in comic.folder.split('/'))
+          if (f.isNotEmpty) localFileName(f),
+        localFileName(comic.fileName),
+      ]),
+    );
   }
 
   /// Downloads [comic] from [library].
@@ -357,9 +392,13 @@ class Downloads extends Notifier<Map<String, File>> {
     await ref.read(remoteLibrariesProvider.future);
     final client = ref.read(shareClientProvider(library));
     if (client == null) throw const ShareException('Not paired');
-    final to = File(
-      p.join(_dir.path, idFileName(comic.id), localFileName(comic.fileName)),
-    );
+    final to = await _target(comic);
+    if (to.existsSync()) {
+      throw ShareException(
+        'Your library folder already has a different '
+        '${p.basename(to.path)}, in ${p.dirname(to.path)}',
+      );
+    }
     await client.download(
       comic.id,
       to,
@@ -367,10 +406,14 @@ class Downloads extends Notifier<Map<String, File>> {
       cancelled: cancelled,
     );
     state = {...state, comic.id: to};
+    if (!to.path.startsWith(_dir.path)) {
+      unawaited(ref.read(libraryScanProvider.notifier).scan());
+    }
     return to;
   }
 
   Future<void> remove(String bookId) async {
+    if (!removable(bookId)) return;
     final dir = Directory(p.join(_dir.path, idFileName(bookId)));
     if (dir.existsSync()) await dir.delete(recursive: true);
     state = {...state}..remove(bookId);

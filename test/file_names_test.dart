@@ -3,7 +3,7 @@ import 'package:panelist/core/util/file_names.dart';
 
 void main() {
   test('book IDs as file names on Windows, and back', () {
-    const id = 'pages:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b';
+    const id = 'file:pages:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b';
     final name = idFileName(id, windows: true);
     expect(name, isNot(contains(':')));
     expect(idFromFileName(name, windows: true), id);

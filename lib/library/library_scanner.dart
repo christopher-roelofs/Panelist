@@ -169,10 +169,11 @@ class LibraryScanner extends Notifier<ScanStatus> {
       do {
         _again = false;
         await _scanOnce();
-      } while (_again);
+      } while (_again && ref.mounted);
     } finally {
       _running = null;
-      state = const ScanStatus();
+      // Gone (the app or a test shutting down): nothing to tell.
+      if (ref.mounted) state = const ScanStatus();
     }
   }
 
@@ -220,6 +221,7 @@ class LibraryScanner extends Notifier<ScanStatus> {
         for (final e in await db.entriesOf(root.id))
           if (e.bookId == null && e.error == null) e,
     ];
+    if (!ref.mounted) return;
     final read = ref.read(comicReaderProvider);
     final covers = ref.read(coversDirProvider);
     await covers.create(recursive: true);

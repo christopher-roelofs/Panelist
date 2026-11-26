@@ -1,14 +1,15 @@
 import 'dart:io';
 
-/// A book ID (`pages:<sha1>`, `file:<hash>`) as a file or folder name.
-/// Windows doesn't allow `:` in names, so there it becomes `_`; elsewhere
-/// IDs are used as they are (keeping existing covers).
+/// A book ID (`file:pages:<sha1>`, `file:<hash>`) as a file or folder
+/// name. Windows doesn't allow `:` in names, so there each becomes `_` (IDs
+/// have no `_` of their own); elsewhere IDs are used as they are (keeping
+/// existing covers).
 String idFileName(String bookId, {bool? windows}) =>
-    (windows ?? Platform.isWindows) ? bookId.replaceFirst(':', '_') : bookId;
+    (windows ?? Platform.isWindows) ? bookId.replaceAll(':', '_') : bookId;
 
 /// The book ID an [idFileName] stands for.
 String idFromFileName(String name, {bool? windows}) =>
-    (windows ?? Platform.isWindows) ? name.replaceFirst('_', ':') : name;
+    (windows ?? Platform.isWindows) ? name.replaceAll('_', ':') : name;
 
 /// [name] (from another computer) made valid on this one: on Windows,
 /// characters it refuses become `-` (`:` as ` -`), and a trailing dot or

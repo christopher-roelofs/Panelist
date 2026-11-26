@@ -197,6 +197,9 @@ class _DownloadButtonState extends ConsumerState<DownloadButton> {
     final where = _where;
     if (where == null) return const SizedBox.shrink();
     final downloaded = ref.watch(downloadsProvider).containsKey(where.bookId);
+    final removable = ref
+        .read(downloadsProvider.notifier)
+        .removable(where.bookId);
     if (_progress case final progress?) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -209,6 +212,19 @@ class _DownloadButtonState extends ConsumerState<DownloadButton> {
             child: const Text('Stop'),
           ),
         ],
+      );
+    }
+    if (downloaded && !removable) {
+      return const OutlinedButton(
+        onPressed: null,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.download_done),
+            SizedBox(width: 8),
+            Text('In your library'),
+          ],
+        ),
       );
     }
     if (downloaded) {
@@ -396,6 +412,22 @@ class DownloadAllButton extends ConsumerWidget {
     final missing = byLibrary.values.fold(0, (n, l) => n + l.length);
     if (missing == 0) {
       if (have == 0) return const SizedBox.shrink();
+      final notifier = ref.read(downloadsProvider.notifier);
+      final anyRemovable = comics.any(
+        (c) => switch (parseRemoteLocation(c.location)) {
+          final where? => notifier.removable(where.bookId),
+          null => false,
+        },
+      );
+      if (!anyRemovable) {
+        return OutlinedButton.icon(
+          onPressed: null,
+          icon: const Icon(Icons.download_done),
+          label: Text(
+            have == 1 ? 'In your library' : 'All $have in your library',
+          ),
+        );
+      }
       return OutlinedButton.icon(
         onPressed: () async {
           for (final c in comics) {
