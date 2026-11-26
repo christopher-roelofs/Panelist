@@ -19,6 +19,7 @@ import 'library/library_providers.dart';
 import 'library/library_scanner.dart';
 import 'platform/android_documents.dart';
 import 'reader/open_book.dart';
+import 'share/share_settings.dart';
 
 /// `panelist [path]` opens [path] directly in the reader.
 Future<void> main(List<String> args) async {
@@ -81,6 +82,8 @@ class PanelistApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Sharing resumes at start when it was on.
+    if (canShareLibrary) ref.watch(librarySharingProvider);
     final theme = ref.watch(appThemeProvider);
     return DynamicColorBuilder(
       builder: (systemLight, systemDark) => MaterialApp(

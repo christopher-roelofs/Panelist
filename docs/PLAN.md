@@ -45,9 +45,77 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
 | M3 ✅ | Double-page spreads (auto wide-page detection, cover offset), per-book settings, ComicInfo.xml | Spreads read correctly |
 | M4 ✅ | Android: SAF file access, "Open with" intents, touch tuning, memory tuning on phones | Usable on Android phone + tablet |
 | M5 ✅ | Library: library folders, thumbnails, continue reading, Folders / Series / Publishers views | Home screen with Continue Reading |
-| M6 | Metadata management (desktop): book IDs that ignore metadata files; ComicInfo editor (one issue, then bulk); save into archives (CBZ in place, CBR→CBZ, via temp file); Metron and Comic Vine lookup; rename/organise by template, promo clean-up, publisher aliases. Builds on the ComicTools ideas | The PC library can be tagged and organised from Panelist |
+| M6 ✅ | Metadata management (desktop): book IDs that ignore metadata files; ComicInfo editor (one issue, then bulk); save into archives (CBZ in place, CBR→CBZ, via temp file); Metron and Comic Vine lookup; rename/organise by template, promo clean-up, publisher aliases. Builds on the ComicTools ideas | The PC library can be tagged and organised from Panelist |
 | M7 | Library over the local network: the desktop app serves the library (OPDS-style); phone/tablet browse, read or download from it, and send reading progress back (also for comics copied onto the device). Metadata is edited on the PC only | Progress read on the tablet shows on the PC |
-| Later | RTL manga, webtoon scroll, panel zoom, OPDS/Komga, Windows/macOS/iOS, AVIF/JXL | |
+| Later | RTL manga, webtoon scroll, panel zoom, OPDS 1.2 + PSE served for other apps (Panels, Chunky), OPDS/Komga client, Windows/macOS/iOS, AVIF/JXL | |
+
+## M7 plan: the library over the local network
+
+The PC shares its library; other devices (phones, tablets, computers)
+browse it, read from it,
+download from it, and sync reading progress both ways. Details are still
+edited on the PC.
+
+**Pieces**
+- **Server (desktop only)**: Settings → "Share library on this network",
+  off by default. An HTTP server (`shelf`, BSD) on a fixed port (8696,
+  next free one if taken), advertised over mDNS as `_panelist._tcp`
+  ("Panelist on <computer name>") with `bonsoir` (MIT; Android, iOS,
+  Linux, Windows, macOS). Runs while the app is open.
+- **Pairing**: the PC shows a 6-digit code (Settings → Add a device; valid
+  10 minutes). The device enters it once and gets a long random token,
+  sent with every request afterwards. Settings on the PC lists paired
+  devices with "Remove". Nothing but the server's name answers without a
+  token.
+- **API** (JSON, `/api/v1`): `info`; `pair`; `library` (every comic:
+  book ID, folder, file name, size, pages, details; one list, with an
+  ETag so an unchanged library costs nothing); `books/<id>/cover`;
+  `books/<id>/file` (download, resumable with Range); `books/<id>/pages`
+  and `books/<id>/pages/<n>` (read without downloading; PDF pages
+  rendered on the PC at the size asked for); `progress` (sync).
+- **Client (any device: phone, tablet or computer; the user has a Windows
+  tablet, so desktop clients matter as much as Android)**: Settings → "Libraries on
+  this network" lists PCs found, or an address typed in. The library
+  screen switches between "This device" and each PC; browsing reuses the
+  Folders/Series/Publishers views (remote entries are library entries
+  whose location is a server URL). Reading streams pages through a remote
+  page source with the reader's usual preloading plus an on-disk page
+  cache. "Download" saves the file to a folder on the device, where it
+  joins the device's own library.
+- **Progress sync**: book IDs come from the pages (CBZ) or file contents
+  (others), so a downloaded copy has the same ID as the PC's. Each book's
+  progress (page, page count, finished) carries when it last changed.
+  Devices send what changed since their last sync and get back what
+  changed on the PC; per book, the latest change wins (times corrected by
+  the server clock's offset). Sync on start, on resume, on closing a book,
+  and every few minutes while reading; changes made offline go at the
+  next sync.
+
+**Decided (2026-11-25)**: pairing by a code shown on the PC; plain HTTP
+on the home network with a per-device token (HTTPS later); latest change
+wins per book; OPDS for other apps later (on the Later list).
+
+**Schema**: progress gets an "updated" time; new tables for paired devices
+(server side) and remote servers (client side). No migrations: the PC's
+data is reset, but its settings (keys, library folder, rules) are copied
+back by hand; phone/tablet data is cleared with the user's OK.
+
+**Android**: INTERNET permission; cleartext HTTP allowed (Android blocks
+it by default; LAN addresses can't be listed in advance); a multicast lock
+while looking for PCs.
+
+**Steps**
+1. ✅ Schema: progress times, devices, servers.
+2. ✅ Server: info, pairing, library, covers, file, pages, progress; tested
+   in-process.
+3. ✅ PC settings: share switch, pairing code, devices.
+4. Discovery: advertise (✅, checked with an mDNS query) and browse;
+   manual address.
+5. Client: connect and pair, browse a PC's library, read (remote pages,
+   cache), download.
+6. Progress sync both ways.
+7. Live test: Linux PC ↔ Android tablet over Wi-Fi. Done when progress
+   read on the tablet shows on the PC.
 
 ## Distribution (before the first release)
 
@@ -265,6 +333,20 @@ newer).
   Storage Access Framework (write/replace a document, rename, move, create
   folder, delete) rather than All files access, so the app stays fine for
   Google Play. No trash there: converted originals are deleted.
+- Windows (when it gets its turn; never built or run there yet). File
+  operations use dart:io and should work, including on a mapped network
+  drive (a rename within a share is done by the server, no copying). To
+  do: (1) an open comic is locked on Windows, so saving or moving it
+  fails: say "close it first"; (2) "Move to trash" is Linux-only (gio):
+  add the Recycle Bin (SHFileOperation / IFileOperation), and note that
+  network drives have none (deletes are permanent there); (3) warn in the
+  rename/organize preview when a path passes 260 characters (MAX_PATH)
+  unless long paths are on; (4) avoid reserved names (CON, PRN, AUX, NUL,
+  COM1-9, LPT1-9) in rendered names; (5) a rename across drives fails
+  (reported, nothing lost) - with one library folder only if it spans
+  drives; (6) saving details or converting rewrites the CBZ, slow over a
+  network share. Test: build for Windows, organize a library on a mapped
+  NAS drive.
 - Publisher names (M6 step 5): the user's own rules (none built in), from
   → to, compared ignoring case and punctuation. Used for library grouping
   and display, for lookups before saving, and for `{publisher}` in renames.

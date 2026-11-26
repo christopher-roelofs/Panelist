@@ -174,6 +174,18 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _progressUpdatedMeta = const VerificationMeta(
+    'progressUpdated',
+  );
+  @override
+  late final GeneratedColumn<DateTime> progressUpdated =
+      GeneratedColumn<DateTime>(
+        'progress_updated',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _pageSizesMeta = const VerificationMeta(
     'pageSizes',
   );
@@ -239,6 +251,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     rightToLeft,
     publisher,
     finished,
+    progressUpdated,
     pageSizes,
     fitMode,
     layoutMode,
@@ -365,6 +378,15 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         finished.isAcceptableOrUnknown(data['finished']!, _finishedMeta),
       );
     }
+    if (data.containsKey('progress_updated')) {
+      context.handle(
+        _progressUpdatedMeta,
+        progressUpdated.isAcceptableOrUnknown(
+          data['progress_updated']!,
+          _progressUpdatedMeta,
+        ),
+      );
+    }
     if (data.containsKey('page_sizes')) {
       context.handle(
         _pageSizesMeta,
@@ -462,6 +484,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.bool,
         data['${effectivePrefix}finished'],
       )!,
+      progressUpdated: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}progress_updated'],
+      ),
       pageSizes: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}page_sizes'],
@@ -508,6 +534,10 @@ class Book extends DataClass implements Insertable<Book> {
   /// re-reading, until the book is marked unread.
   final bool finished;
 
+  /// When the reading position or finished flag last changed (here or by
+  /// sync); null if never. Syncing compares these: the latest wins.
+  final DateTime? progressUpdated;
+
   /// Cached page sizes, JSON `[[w,h] | null, ...]`.
   final String? pageSizes;
   final String? fitMode;
@@ -530,6 +560,7 @@ class Book extends DataClass implements Insertable<Book> {
     this.rightToLeft,
     this.publisher,
     required this.finished,
+    this.progressUpdated,
     this.pageSizes,
     this.fitMode,
     this.layoutMode,
@@ -572,6 +603,9 @@ class Book extends DataClass implements Insertable<Book> {
       map['publisher'] = Variable<String>(publisher);
     }
     map['finished'] = Variable<bool>(finished);
+    if (!nullToAbsent || progressUpdated != null) {
+      map['progress_updated'] = Variable<DateTime>(progressUpdated);
+    }
     if (!nullToAbsent || pageSizes != null) {
       map['page_sizes'] = Variable<String>(pageSizes);
     }
@@ -621,6 +655,9 @@ class Book extends DataClass implements Insertable<Book> {
           ? const Value.absent()
           : Value(publisher),
       finished: Value(finished),
+      progressUpdated: progressUpdated == null && nullToAbsent
+          ? const Value.absent()
+          : Value(progressUpdated),
       pageSizes: pageSizes == null && nullToAbsent
           ? const Value.absent()
           : Value(pageSizes),
@@ -658,6 +695,7 @@ class Book extends DataClass implements Insertable<Book> {
       rightToLeft: serializer.fromJson<bool?>(json['rightToLeft']),
       publisher: serializer.fromJson<String?>(json['publisher']),
       finished: serializer.fromJson<bool>(json['finished']),
+      progressUpdated: serializer.fromJson<DateTime?>(json['progressUpdated']),
       pageSizes: serializer.fromJson<String?>(json['pageSizes']),
       fitMode: serializer.fromJson<String?>(json['fitMode']),
       layoutMode: serializer.fromJson<String?>(json['layoutMode']),
@@ -684,6 +722,7 @@ class Book extends DataClass implements Insertable<Book> {
       'rightToLeft': serializer.toJson<bool?>(rightToLeft),
       'publisher': serializer.toJson<String?>(publisher),
       'finished': serializer.toJson<bool>(finished),
+      'progressUpdated': serializer.toJson<DateTime?>(progressUpdated),
       'pageSizes': serializer.toJson<String?>(pageSizes),
       'fitMode': serializer.toJson<String?>(fitMode),
       'layoutMode': serializer.toJson<String?>(layoutMode),
@@ -708,6 +747,7 @@ class Book extends DataClass implements Insertable<Book> {
     Value<bool?> rightToLeft = const Value.absent(),
     Value<String?> publisher = const Value.absent(),
     bool? finished,
+    Value<DateTime?> progressUpdated = const Value.absent(),
     Value<String?> pageSizes = const Value.absent(),
     Value<String?> fitMode = const Value.absent(),
     Value<String?> layoutMode = const Value.absent(),
@@ -729,6 +769,9 @@ class Book extends DataClass implements Insertable<Book> {
     rightToLeft: rightToLeft.present ? rightToLeft.value : this.rightToLeft,
     publisher: publisher.present ? publisher.value : this.publisher,
     finished: finished ?? this.finished,
+    progressUpdated: progressUpdated.present
+        ? progressUpdated.value
+        : this.progressUpdated,
     pageSizes: pageSizes.present ? pageSizes.value : this.pageSizes,
     fitMode: fitMode.present ? fitMode.value : this.fitMode,
     layoutMode: layoutMode.present ? layoutMode.value : this.layoutMode,
@@ -758,6 +801,9 @@ class Book extends DataClass implements Insertable<Book> {
           : this.rightToLeft,
       publisher: data.publisher.present ? data.publisher.value : this.publisher,
       finished: data.finished.present ? data.finished.value : this.finished,
+      progressUpdated: data.progressUpdated.present
+          ? data.progressUpdated.value
+          : this.progressUpdated,
       pageSizes: data.pageSizes.present ? data.pageSizes.value : this.pageSizes,
       fitMode: data.fitMode.present ? data.fitMode.value : this.fitMode,
       layoutMode: data.layoutMode.present
@@ -788,6 +834,7 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('rightToLeft: $rightToLeft, ')
           ..write('publisher: $publisher, ')
           ..write('finished: $finished, ')
+          ..write('progressUpdated: $progressUpdated, ')
           ..write('pageSizes: $pageSizes, ')
           ..write('fitMode: $fitMode, ')
           ..write('layoutMode: $layoutMode, ')
@@ -797,7 +844,7 @@ class Book extends DataClass implements Insertable<Book> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     path,
     title,
@@ -814,11 +861,12 @@ class Book extends DataClass implements Insertable<Book> {
     rightToLeft,
     publisher,
     finished,
+    progressUpdated,
     pageSizes,
     fitMode,
     layoutMode,
     coverAlone,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -839,6 +887,7 @@ class Book extends DataClass implements Insertable<Book> {
           other.rightToLeft == this.rightToLeft &&
           other.publisher == this.publisher &&
           other.finished == this.finished &&
+          other.progressUpdated == this.progressUpdated &&
           other.pageSizes == this.pageSizes &&
           other.fitMode == this.fitMode &&
           other.layoutMode == this.layoutMode &&
@@ -862,6 +911,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<bool?> rightToLeft;
   final Value<String?> publisher;
   final Value<bool> finished;
+  final Value<DateTime?> progressUpdated;
   final Value<String?> pageSizes;
   final Value<String?> fitMode;
   final Value<String?> layoutMode;
@@ -884,6 +934,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.rightToLeft = const Value.absent(),
     this.publisher = const Value.absent(),
     this.finished = const Value.absent(),
+    this.progressUpdated = const Value.absent(),
     this.pageSizes = const Value.absent(),
     this.fitMode = const Value.absent(),
     this.layoutMode = const Value.absent(),
@@ -907,6 +958,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.rightToLeft = const Value.absent(),
     this.publisher = const Value.absent(),
     this.finished = const Value.absent(),
+    this.progressUpdated = const Value.absent(),
     this.pageSizes = const Value.absent(),
     this.fitMode = const Value.absent(),
     this.layoutMode = const Value.absent(),
@@ -934,6 +986,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<bool>? rightToLeft,
     Expression<String>? publisher,
     Expression<bool>? finished,
+    Expression<DateTime>? progressUpdated,
     Expression<String>? pageSizes,
     Expression<String>? fitMode,
     Expression<String>? layoutMode,
@@ -957,6 +1010,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (rightToLeft != null) 'right_to_left': rightToLeft,
       if (publisher != null) 'publisher': publisher,
       if (finished != null) 'finished': finished,
+      if (progressUpdated != null) 'progress_updated': progressUpdated,
       if (pageSizes != null) 'page_sizes': pageSizes,
       if (fitMode != null) 'fit_mode': fitMode,
       if (layoutMode != null) 'layout_mode': layoutMode,
@@ -982,6 +1036,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<bool?>? rightToLeft,
     Value<String?>? publisher,
     Value<bool>? finished,
+    Value<DateTime?>? progressUpdated,
     Value<String?>? pageSizes,
     Value<String?>? fitMode,
     Value<String?>? layoutMode,
@@ -1005,6 +1060,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       rightToLeft: rightToLeft ?? this.rightToLeft,
       publisher: publisher ?? this.publisher,
       finished: finished ?? this.finished,
+      progressUpdated: progressUpdated ?? this.progressUpdated,
       pageSizes: pageSizes ?? this.pageSizes,
       fitMode: fitMode ?? this.fitMode,
       layoutMode: layoutMode ?? this.layoutMode,
@@ -1064,6 +1120,9 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (finished.present) {
       map['finished'] = Variable<bool>(finished.value);
     }
+    if (progressUpdated.present) {
+      map['progress_updated'] = Variable<DateTime>(progressUpdated.value);
+    }
     if (pageSizes.present) {
       map['page_sizes'] = Variable<String>(pageSizes.value);
     }
@@ -1101,6 +1160,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('rightToLeft: $rightToLeft, ')
           ..write('publisher: $publisher, ')
           ..write('finished: $finished, ')
+          ..write('progressUpdated: $progressUpdated, ')
           ..write('pageSizes: $pageSizes, ')
           ..write('fitMode: $fitMode, ')
           ..write('layoutMode: $layoutMode, ')
@@ -2415,6 +2475,705 @@ class LibraryEntriesCompanion extends UpdateCompanion<LibraryEntry> {
   }
 }
 
+class $PairedDevicesTable extends PairedDevices
+    with TableInfo<$PairedDevicesTable, PairedDevice> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PairedDevicesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tokenHashMeta = const VerificationMeta(
+    'tokenHash',
+  );
+  @override
+  late final GeneratedColumn<String> tokenHash = GeneratedColumn<String>(
+    'token_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _addedMeta = const VerificationMeta('added');
+  @override
+  late final GeneratedColumn<DateTime> added = GeneratedColumn<DateTime>(
+    'added',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastSeenMeta = const VerificationMeta(
+    'lastSeen',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSeen = GeneratedColumn<DateTime>(
+    'last_seen',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, tokenHash, added, lastSeen];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'paired_devices';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PairedDevice> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('token_hash')) {
+      context.handle(
+        _tokenHashMeta,
+        tokenHash.isAcceptableOrUnknown(data['token_hash']!, _tokenHashMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tokenHashMeta);
+    }
+    if (data.containsKey('added')) {
+      context.handle(
+        _addedMeta,
+        added.isAcceptableOrUnknown(data['added']!, _addedMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_addedMeta);
+    }
+    if (data.containsKey('last_seen')) {
+      context.handle(
+        _lastSeenMeta,
+        lastSeen.isAcceptableOrUnknown(data['last_seen']!, _lastSeenMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PairedDevice map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PairedDevice(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      tokenHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}token_hash'],
+      )!,
+      added: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}added'],
+      )!,
+      lastSeen: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_seen'],
+      ),
+    );
+  }
+
+  @override
+  $PairedDevicesTable createAlias(String alias) {
+    return $PairedDevicesTable(attachedDatabase, alias);
+  }
+}
+
+class PairedDevice extends DataClass implements Insertable<PairedDevice> {
+  final int id;
+  final String name;
+
+  /// SHA-256 of the device's token (the token itself isn't kept).
+  final String tokenHash;
+  final DateTime added;
+  final DateTime? lastSeen;
+  const PairedDevice({
+    required this.id,
+    required this.name,
+    required this.tokenHash,
+    required this.added,
+    this.lastSeen,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['token_hash'] = Variable<String>(tokenHash);
+    map['added'] = Variable<DateTime>(added);
+    if (!nullToAbsent || lastSeen != null) {
+      map['last_seen'] = Variable<DateTime>(lastSeen);
+    }
+    return map;
+  }
+
+  PairedDevicesCompanion toCompanion(bool nullToAbsent) {
+    return PairedDevicesCompanion(
+      id: Value(id),
+      name: Value(name),
+      tokenHash: Value(tokenHash),
+      added: Value(added),
+      lastSeen: lastSeen == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSeen),
+    );
+  }
+
+  factory PairedDevice.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PairedDevice(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      tokenHash: serializer.fromJson<String>(json['tokenHash']),
+      added: serializer.fromJson<DateTime>(json['added']),
+      lastSeen: serializer.fromJson<DateTime?>(json['lastSeen']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'tokenHash': serializer.toJson<String>(tokenHash),
+      'added': serializer.toJson<DateTime>(added),
+      'lastSeen': serializer.toJson<DateTime?>(lastSeen),
+    };
+  }
+
+  PairedDevice copyWith({
+    int? id,
+    String? name,
+    String? tokenHash,
+    DateTime? added,
+    Value<DateTime?> lastSeen = const Value.absent(),
+  }) => PairedDevice(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    tokenHash: tokenHash ?? this.tokenHash,
+    added: added ?? this.added,
+    lastSeen: lastSeen.present ? lastSeen.value : this.lastSeen,
+  );
+  PairedDevice copyWithCompanion(PairedDevicesCompanion data) {
+    return PairedDevice(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      tokenHash: data.tokenHash.present ? data.tokenHash.value : this.tokenHash,
+      added: data.added.present ? data.added.value : this.added,
+      lastSeen: data.lastSeen.present ? data.lastSeen.value : this.lastSeen,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PairedDevice(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('tokenHash: $tokenHash, ')
+          ..write('added: $added, ')
+          ..write('lastSeen: $lastSeen')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, tokenHash, added, lastSeen);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PairedDevice &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.tokenHash == this.tokenHash &&
+          other.added == this.added &&
+          other.lastSeen == this.lastSeen);
+}
+
+class PairedDevicesCompanion extends UpdateCompanion<PairedDevice> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<String> tokenHash;
+  final Value<DateTime> added;
+  final Value<DateTime?> lastSeen;
+  const PairedDevicesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.tokenHash = const Value.absent(),
+    this.added = const Value.absent(),
+    this.lastSeen = const Value.absent(),
+  });
+  PairedDevicesCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required String tokenHash,
+    required DateTime added,
+    this.lastSeen = const Value.absent(),
+  }) : name = Value(name),
+       tokenHash = Value(tokenHash),
+       added = Value(added);
+  static Insertable<PairedDevice> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<String>? tokenHash,
+    Expression<DateTime>? added,
+    Expression<DateTime>? lastSeen,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (tokenHash != null) 'token_hash': tokenHash,
+      if (added != null) 'added': added,
+      if (lastSeen != null) 'last_seen': lastSeen,
+    });
+  }
+
+  PairedDevicesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<String>? tokenHash,
+    Value<DateTime>? added,
+    Value<DateTime?>? lastSeen,
+  }) {
+    return PairedDevicesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      tokenHash: tokenHash ?? this.tokenHash,
+      added: added ?? this.added,
+      lastSeen: lastSeen ?? this.lastSeen,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (tokenHash.present) {
+      map['token_hash'] = Variable<String>(tokenHash.value);
+    }
+    if (added.present) {
+      map['added'] = Variable<DateTime>(added.value);
+    }
+    if (lastSeen.present) {
+      map['last_seen'] = Variable<DateTime>(lastSeen.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PairedDevicesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('tokenHash: $tokenHash, ')
+          ..write('added: $added, ')
+          ..write('lastSeen: $lastSeen')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RemoteLibrariesTable extends RemoteLibraries
+    with TableInfo<$RemoteLibrariesTable, RemoteLibrary> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RemoteLibrariesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _addressMeta = const VerificationMeta(
+    'address',
+  );
+  @override
+  late final GeneratedColumn<String> address = GeneratedColumn<String>(
+    'address',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tokenMeta = const VerificationMeta('token');
+  @override
+  late final GeneratedColumn<String> token = GeneratedColumn<String>(
+    'token',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncedUntilMeta = const VerificationMeta(
+    'syncedUntil',
+  );
+  @override
+  late final GeneratedColumn<DateTime> syncedUntil = GeneratedColumn<DateTime>(
+    'synced_until',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, address, token, syncedUntil];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'remote_libraries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RemoteLibrary> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('address')) {
+      context.handle(
+        _addressMeta,
+        address.isAcceptableOrUnknown(data['address']!, _addressMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_addressMeta);
+    }
+    if (data.containsKey('token')) {
+      context.handle(
+        _tokenMeta,
+        token.isAcceptableOrUnknown(data['token']!, _tokenMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tokenMeta);
+    }
+    if (data.containsKey('synced_until')) {
+      context.handle(
+        _syncedUntilMeta,
+        syncedUntil.isAcceptableOrUnknown(
+          data['synced_until']!,
+          _syncedUntilMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RemoteLibrary map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RemoteLibrary(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      address: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}address'],
+      )!,
+      token: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}token'],
+      )!,
+      syncedUntil: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}synced_until'],
+      ),
+    );
+  }
+
+  @override
+  $RemoteLibrariesTable createAlias(String alias) {
+    return $RemoteLibrariesTable(attachedDatabase, alias);
+  }
+}
+
+class RemoteLibrary extends DataClass implements Insertable<RemoteLibrary> {
+  final int id;
+  final String name;
+
+  /// `host:port` last reached at.
+  final String address;
+  final String token;
+
+  /// The server's time of the last sync (changes after it are fetched
+  /// next), or null before the first.
+  final DateTime? syncedUntil;
+  const RemoteLibrary({
+    required this.id,
+    required this.name,
+    required this.address,
+    required this.token,
+    this.syncedUntil,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['address'] = Variable<String>(address);
+    map['token'] = Variable<String>(token);
+    if (!nullToAbsent || syncedUntil != null) {
+      map['synced_until'] = Variable<DateTime>(syncedUntil);
+    }
+    return map;
+  }
+
+  RemoteLibrariesCompanion toCompanion(bool nullToAbsent) {
+    return RemoteLibrariesCompanion(
+      id: Value(id),
+      name: Value(name),
+      address: Value(address),
+      token: Value(token),
+      syncedUntil: syncedUntil == null && nullToAbsent
+          ? const Value.absent()
+          : Value(syncedUntil),
+    );
+  }
+
+  factory RemoteLibrary.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RemoteLibrary(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      address: serializer.fromJson<String>(json['address']),
+      token: serializer.fromJson<String>(json['token']),
+      syncedUntil: serializer.fromJson<DateTime?>(json['syncedUntil']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'address': serializer.toJson<String>(address),
+      'token': serializer.toJson<String>(token),
+      'syncedUntil': serializer.toJson<DateTime?>(syncedUntil),
+    };
+  }
+
+  RemoteLibrary copyWith({
+    int? id,
+    String? name,
+    String? address,
+    String? token,
+    Value<DateTime?> syncedUntil = const Value.absent(),
+  }) => RemoteLibrary(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    address: address ?? this.address,
+    token: token ?? this.token,
+    syncedUntil: syncedUntil.present ? syncedUntil.value : this.syncedUntil,
+  );
+  RemoteLibrary copyWithCompanion(RemoteLibrariesCompanion data) {
+    return RemoteLibrary(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      address: data.address.present ? data.address.value : this.address,
+      token: data.token.present ? data.token.value : this.token,
+      syncedUntil: data.syncedUntil.present
+          ? data.syncedUntil.value
+          : this.syncedUntil,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RemoteLibrary(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('token: $token, ')
+          ..write('syncedUntil: $syncedUntil')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, address, token, syncedUntil);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RemoteLibrary &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.address == this.address &&
+          other.token == this.token &&
+          other.syncedUntil == this.syncedUntil);
+}
+
+class RemoteLibrariesCompanion extends UpdateCompanion<RemoteLibrary> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<String> address;
+  final Value<String> token;
+  final Value<DateTime?> syncedUntil;
+  const RemoteLibrariesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.address = const Value.absent(),
+    this.token = const Value.absent(),
+    this.syncedUntil = const Value.absent(),
+  });
+  RemoteLibrariesCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required String address,
+    required String token,
+    this.syncedUntil = const Value.absent(),
+  }) : name = Value(name),
+       address = Value(address),
+       token = Value(token);
+  static Insertable<RemoteLibrary> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<String>? address,
+    Expression<String>? token,
+    Expression<DateTime>? syncedUntil,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (address != null) 'address': address,
+      if (token != null) 'token': token,
+      if (syncedUntil != null) 'synced_until': syncedUntil,
+    });
+  }
+
+  RemoteLibrariesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<String>? address,
+    Value<String>? token,
+    Value<DateTime?>? syncedUntil,
+  }) {
+    return RemoteLibrariesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      token: token ?? this.token,
+      syncedUntil: syncedUntil ?? this.syncedUntil,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (address.present) {
+      map['address'] = Variable<String>(address.value);
+    }
+    if (token.present) {
+      map['token'] = Variable<String>(token.value);
+    }
+    if (syncedUntil.present) {
+      map['synced_until'] = Variable<DateTime>(syncedUntil.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RemoteLibrariesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('token: $token, ')
+          ..write('syncedUntil: $syncedUntil')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2422,6 +3181,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SettingsTable settings = $SettingsTable(this);
   late final $LibraryRootsTable libraryRoots = $LibraryRootsTable(this);
   late final $LibraryEntriesTable libraryEntries = $LibraryEntriesTable(this);
+  late final $PairedDevicesTable pairedDevices = $PairedDevicesTable(this);
+  late final $RemoteLibrariesTable remoteLibraries = $RemoteLibrariesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2431,6 +3194,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     settings,
     libraryRoots,
     libraryEntries,
+    pairedDevices,
+    remoteLibraries,
   ];
 }
 
@@ -2451,6 +3216,7 @@ typedef $$BooksTableCreateCompanionBuilder = BooksCompanion Function({
   Value<bool?> rightToLeft,
   Value<String?> publisher,
   Value<bool> finished,
+  Value<DateTime?> progressUpdated,
   Value<String?> pageSizes,
   Value<String?> fitMode,
   Value<String?> layoutMode,
@@ -2474,6 +3240,7 @@ typedef $$BooksTableUpdateCompanionBuilder = BooksCompanion Function({
   Value<bool?> rightToLeft,
   Value<String?> publisher,
   Value<bool> finished,
+  Value<DateTime?> progressUpdated,
   Value<String?> pageSizes,
   Value<String?> fitMode,
   Value<String?> layoutMode,
@@ -2566,6 +3333,11 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
 
   ColumnFilters<bool> get finished => $composableBuilder(
     column: $table.finished,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get progressUpdated => $composableBuilder(
+    column: $table.progressUpdated,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2679,6 +3451,11 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get progressUpdated => $composableBuilder(
+    column: $table.progressUpdated,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get pageSizes => $composableBuilder(
     column: $table.pageSizes,
     builder: (column) => ColumnOrderings(column),
@@ -2763,6 +3540,11 @@ class $$BooksTableAnnotationComposer
   GeneratedColumn<bool> get finished =>
       $composableBuilder(column: $table.finished, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get progressUpdated => $composableBuilder(
+    column: $table.progressUpdated,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get pageSizes =>
       $composableBuilder(column: $table.pageSizes, builder: (column) => column);
 
@@ -2824,6 +3606,7 @@ class $$BooksTableTableManager
                 Value<bool?> rightToLeft = const Value.absent(),
                 Value<String?> publisher = const Value.absent(),
                 Value<bool> finished = const Value.absent(),
+                Value<DateTime?> progressUpdated = const Value.absent(),
                 Value<String?> pageSizes = const Value.absent(),
                 Value<String?> fitMode = const Value.absent(),
                 Value<String?> layoutMode = const Value.absent(),
@@ -2846,6 +3629,7 @@ class $$BooksTableTableManager
                 rightToLeft: rightToLeft,
                 publisher: publisher,
                 finished: finished,
+                progressUpdated: progressUpdated,
                 pageSizes: pageSizes,
                 fitMode: fitMode,
                 layoutMode: layoutMode,
@@ -2870,6 +3654,7 @@ class $$BooksTableTableManager
                 Value<bool?> rightToLeft = const Value.absent(),
                 Value<String?> publisher = const Value.absent(),
                 Value<bool> finished = const Value.absent(),
+                Value<DateTime?> progressUpdated = const Value.absent(),
                 Value<String?> pageSizes = const Value.absent(),
                 Value<String?> fitMode = const Value.absent(),
                 Value<String?> layoutMode = const Value.absent(),
@@ -2892,6 +3677,7 @@ class $$BooksTableTableManager
                 rightToLeft: rightToLeft,
                 publisher: publisher,
                 finished: finished,
+                progressUpdated: progressUpdated,
                 pageSizes: pageSizes,
                 fitMode: fitMode,
                 layoutMode: layoutMode,
@@ -3624,6 +4410,416 @@ typedef $$LibraryEntriesTableProcessedTableManager =
       LibraryEntry,
       PrefetchHooks Function()
     >;
+typedef $$PairedDevicesTableCreateCompanionBuilder =
+    PairedDevicesCompanion Function({
+      Value<int> id,
+      required String name,
+      required String tokenHash,
+      required DateTime added,
+      Value<DateTime?> lastSeen,
+    });
+typedef $$PairedDevicesTableUpdateCompanionBuilder =
+    PairedDevicesCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<String> tokenHash,
+      Value<DateTime> added,
+      Value<DateTime?> lastSeen,
+    });
+
+class $$PairedDevicesTableFilterComposer
+    extends Composer<_$AppDatabase, $PairedDevicesTable> {
+  $$PairedDevicesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tokenHash => $composableBuilder(
+    column: $table.tokenHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get added => $composableBuilder(
+    column: $table.added,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSeen => $composableBuilder(
+    column: $table.lastSeen,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PairedDevicesTableOrderingComposer
+    extends Composer<_$AppDatabase, $PairedDevicesTable> {
+  $$PairedDevicesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tokenHash => $composableBuilder(
+    column: $table.tokenHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get added => $composableBuilder(
+    column: $table.added,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSeen => $composableBuilder(
+    column: $table.lastSeen,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PairedDevicesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PairedDevicesTable> {
+  $$PairedDevicesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get tokenHash =>
+      $composableBuilder(column: $table.tokenHash, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get added =>
+      $composableBuilder(column: $table.added, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastSeen =>
+      $composableBuilder(column: $table.lastSeen, builder: (column) => column);
+}
+
+class $$PairedDevicesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PairedDevicesTable,
+          PairedDevice,
+          $$PairedDevicesTableFilterComposer,
+          $$PairedDevicesTableOrderingComposer,
+          $$PairedDevicesTableAnnotationComposer,
+          $$PairedDevicesTableCreateCompanionBuilder,
+          $$PairedDevicesTableUpdateCompanionBuilder,
+          (
+            PairedDevice,
+            BaseReferences<_$AppDatabase, $PairedDevicesTable, PairedDevice>,
+          ),
+          PairedDevice,
+          PrefetchHooks Function()
+        > {
+  $$PairedDevicesTableTableManager(_$AppDatabase db, $PairedDevicesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PairedDevicesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PairedDevicesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PairedDevicesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> tokenHash = const Value.absent(),
+                Value<DateTime> added = const Value.absent(),
+                Value<DateTime?> lastSeen = const Value.absent(),
+              }) => PairedDevicesCompanion(
+                id: id,
+                name: name,
+                tokenHash: tokenHash,
+                added: added,
+                lastSeen: lastSeen,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                required String tokenHash,
+                required DateTime added,
+                Value<DateTime?> lastSeen = const Value.absent(),
+              }) => PairedDevicesCompanion.insert(
+                id: id,
+                name: name,
+                tokenHash: tokenHash,
+                added: added,
+                lastSeen: lastSeen,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$PairedDevicesTable, PairedDevice>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $PairedDevicesTable,
+                    PairedDevice
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PairedDevicesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PairedDevicesTable,
+      PairedDevice,
+      $$PairedDevicesTableFilterComposer,
+      $$PairedDevicesTableOrderingComposer,
+      $$PairedDevicesTableAnnotationComposer,
+      $$PairedDevicesTableCreateCompanionBuilder,
+      $$PairedDevicesTableUpdateCompanionBuilder,
+      (
+        PairedDevice,
+        BaseReferences<_$AppDatabase, $PairedDevicesTable, PairedDevice>,
+      ),
+      PairedDevice,
+      PrefetchHooks Function()
+    >;
+typedef $$RemoteLibrariesTableCreateCompanionBuilder =
+    RemoteLibrariesCompanion Function({
+      Value<int> id,
+      required String name,
+      required String address,
+      required String token,
+      Value<DateTime?> syncedUntil,
+    });
+typedef $$RemoteLibrariesTableUpdateCompanionBuilder =
+    RemoteLibrariesCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<String> address,
+      Value<String> token,
+      Value<DateTime?> syncedUntil,
+    });
+
+class $$RemoteLibrariesTableFilterComposer
+    extends Composer<_$AppDatabase, $RemoteLibrariesTable> {
+  $$RemoteLibrariesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get token => $composableBuilder(
+    column: $table.token,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get syncedUntil => $composableBuilder(
+    column: $table.syncedUntil,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RemoteLibrariesTableOrderingComposer
+    extends Composer<_$AppDatabase, $RemoteLibrariesTable> {
+  $$RemoteLibrariesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get token => $composableBuilder(
+    column: $table.token,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get syncedUntil => $composableBuilder(
+    column: $table.syncedUntil,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RemoteLibrariesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RemoteLibrariesTable> {
+  $$RemoteLibrariesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get address =>
+      $composableBuilder(column: $table.address, builder: (column) => column);
+
+  GeneratedColumn<String> get token =>
+      $composableBuilder(column: $table.token, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get syncedUntil => $composableBuilder(
+    column: $table.syncedUntil,
+    builder: (column) => column,
+  );
+}
+
+class $$RemoteLibrariesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RemoteLibrariesTable,
+          RemoteLibrary,
+          $$RemoteLibrariesTableFilterComposer,
+          $$RemoteLibrariesTableOrderingComposer,
+          $$RemoteLibrariesTableAnnotationComposer,
+          $$RemoteLibrariesTableCreateCompanionBuilder,
+          $$RemoteLibrariesTableUpdateCompanionBuilder,
+          (
+            RemoteLibrary,
+            BaseReferences<_$AppDatabase, $RemoteLibrariesTable, RemoteLibrary>,
+          ),
+          RemoteLibrary,
+          PrefetchHooks Function()
+        > {
+  $$RemoteLibrariesTableTableManager(
+    _$AppDatabase db,
+    $RemoteLibrariesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RemoteLibrariesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RemoteLibrariesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RemoteLibrariesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> address = const Value.absent(),
+                Value<String> token = const Value.absent(),
+                Value<DateTime?> syncedUntil = const Value.absent(),
+              }) => RemoteLibrariesCompanion(
+                id: id,
+                name: name,
+                address: address,
+                token: token,
+                syncedUntil: syncedUntil,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                required String address,
+                required String token,
+                Value<DateTime?> syncedUntil = const Value.absent(),
+              }) => RemoteLibrariesCompanion.insert(
+                id: id,
+                name: name,
+                address: address,
+                token: token,
+                syncedUntil: syncedUntil,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$RemoteLibrariesTable, RemoteLibrary>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $RemoteLibrariesTable,
+                    RemoteLibrary
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RemoteLibrariesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RemoteLibrariesTable,
+      RemoteLibrary,
+      $$RemoteLibrariesTableFilterComposer,
+      $$RemoteLibrariesTableOrderingComposer,
+      $$RemoteLibrariesTableAnnotationComposer,
+      $$RemoteLibrariesTableCreateCompanionBuilder,
+      $$RemoteLibrariesTableUpdateCompanionBuilder,
+      (
+        RemoteLibrary,
+        BaseReferences<_$AppDatabase, $RemoteLibrariesTable, RemoteLibrary>,
+      ),
+      RemoteLibrary,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3636,4 +4832,8 @@ class $AppDatabaseManager {
       $$LibraryRootsTableTableManager(_db, _db.libraryRoots);
   $$LibraryEntriesTableTableManager get libraryEntries =>
       $$LibraryEntriesTableTableManager(_db, _db.libraryEntries);
+  $$PairedDevicesTableTableManager get pairedDevices =>
+      $$PairedDevicesTableTableManager(_db, _db.pairedDevices);
+  $$RemoteLibrariesTableTableManager get remoteLibraries =>
+      $$RemoteLibrariesTableTableManager(_db, _db.remoteLibraries);
 }

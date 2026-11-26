@@ -2,6 +2,8 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../share/share_protocol.dart';
+
 part 'database.g.dart';
 
 /// Every book the user has opened, keyed by [PageSource.id].
@@ -27,6 +29,10 @@ class Books extends Table {
   /// Read to the end (or marked read). Stays set when paging back or
   /// re-reading, until the book is marked unread.
   BoolColumn get finished => boolean().withDefault(const Constant(false))();
+
+  /// When the reading position or finished flag last changed (here or by
+  /// sync); null if never. Syncing compares these: the latest wins.
+  DateTimeColumn get progressUpdated => dateTime().nullable()();
 
   /// Cached page sizes, JSON `[[w,h] | null, ...]`.
   TextColumn get pageSizes => text().nullable()();
@@ -97,7 +103,41 @@ typedef BookProgress = ({int currentPage, int pageCount, bool finished});
 /// without being opened, marked unread, or removed from recent.
 final notRecent = DateTime.fromMillisecondsSinceEpoch(0);
 
-@DriftDatabase(tables: [Books, Settings, LibraryRoots, LibraryEntries])
+/// A device paired with this computer's shared library.
+class PairedDevices extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+
+  /// SHA-256 of the device's token (the token itself isn't kept).
+  TextColumn get tokenHash => text().unique()();
+  DateTimeColumn get added => dateTime()();
+  DateTimeColumn get lastSeen => dateTime().nullable()();
+}
+
+/// A computer's shared library this device has paired with.
+class RemoteLibraries extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+
+  /// `host:port` last reached at.
+  TextColumn get address => text()();
+  TextColumn get token => text()();
+
+  /// The server's time of the last sync (changes after it are fetched
+  /// next), or null before the first.
+  DateTimeColumn get syncedUntil => dateTime().nullable()();
+}
+
+@DriftDatabase(
+  tables: [
+    Books,
+    Settings,
+    LibraryRoots,
+    LibraryEntries,
+    PairedDevices,
+    RemoteLibraries,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
     : super(
@@ -151,6 +191,7 @@ class AppDatabase extends _$AppDatabase {
       (update(books)..where((b) => b.id.equals(id))).write(
         BooksCompanion.custom(
           currentPage: Variable(page),
+          progressUpdated: Variable(DateTime.now()),
           finished:
               books.finished |
               Variable(page)
@@ -189,6 +230,7 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markRead(
     Iterable<({String id, String path, String title, int pageCount})> items,
   ) => transaction(() async {
+    final now = DateTime.now();
     for (final b in items) {
       await into(books).insert(
         BooksCompanion.insert(
@@ -198,9 +240,13 @@ class AppDatabase extends _$AppDatabase {
           pageCount: b.pageCount,
           lastOpened: notRecent,
           finished: const Value(true),
+          progressUpdated: Value(now),
         ),
         onConflict: DoUpdate(
-          (_) => const BooksCompanion(finished: Value(true)),
+          (_) => BooksCompanion(
+            finished: const Value(true),
+            progressUpdated: Value(now),
+          ),
         ),
       );
     }
@@ -214,8 +260,100 @@ class AppDatabase extends _$AppDatabase {
           finished: const Value(false),
           currentPage: const Value(0),
           lastOpened: Value(notRecent),
+          progressUpdated: Value(DateTime.now()),
         ),
       );
+
+  // --- Sharing (M7) ----------------------------------------------------
+
+  Future<PairedDevice?> pairedDevice(String tokenHash) => (select(
+    pairedDevices,
+  )..where((d) => d.tokenHash.equals(tokenHash))).getSingleOrNull();
+
+  Future<int> addPairedDevice({
+    required String name,
+    required String tokenHash,
+    required DateTime added,
+  }) => into(pairedDevices).insert(
+    PairedDevicesCompanion.insert(
+      name: name,
+      tokenHash: tokenHash,
+      added: added,
+    ),
+  );
+
+  Future<void> devicePresent(int id, DateTime when) =>
+      (update(pairedDevices)..where((d) => d.id.equals(id))).write(
+        PairedDevicesCompanion(lastSeen: Value(when)),
+      );
+
+  Future<void> removePairedDevice(int id) =>
+      (delete(pairedDevices)..where((d) => d.id.equals(id))).go();
+
+  Stream<List<PairedDevice>> watchPairedDevices() => (select(
+    pairedDevices,
+  )..orderBy([(d) => OrderingTerm(expression: d.added)])).watch();
+
+  /// Applies a reading position from another device if it's newer than
+  /// what's here (the latest change wins). A book never opened here gets a
+  /// row at [path]; one being read (not finished, past the first page)
+  /// shows in Continue reading.
+  Future<bool> applyProgress(
+    ProgressChange c, {
+    required String path,
+    required String title,
+  }) => transaction(() async {
+    final old = await book(c.id);
+    final mine = old?.progressUpdated;
+    if (mine != null && !c.updated.isAfter(mine)) return false;
+    final reading = !c.finished && c.page > 0;
+    if (old == null) {
+      await into(books).insert(
+        BooksCompanion.insert(
+          id: c.id,
+          path: path,
+          title: title,
+          pageCount: c.pageCount,
+          currentPage: Value(c.page),
+          finished: Value(c.finished),
+          progressUpdated: Value(c.updated),
+          lastOpened: reading ? c.updated : notRecent,
+        ),
+      );
+    } else {
+      await (update(books)..where((b) => b.id.equals(c.id))).write(
+        BooksCompanion(
+          currentPage: Value(c.page),
+          finished: Value(c.finished),
+          progressUpdated: Value(c.updated),
+          lastOpened: reading && c.updated.isAfter(old.lastOpened)
+              ? Value(c.updated)
+              : const Value.absent(),
+        ),
+      );
+    }
+    return true;
+  });
+
+  /// Reading positions changed after [since] (all of them when null).
+  Future<List<ProgressChange>> progressChangedSince(DateTime? since) async {
+    final q = select(books)
+      ..where(
+        (b) => since == null
+            ? b.progressUpdated.isNotNull()
+            : b.progressUpdated.isBiggerThanValue(since),
+      );
+    return [
+      for (final b in await q.get())
+        ProgressChange(
+          id: b.id,
+          page: b.currentPage,
+          pageCount: b.pageCount,
+          finished: b.finished,
+          updated: b.progressUpdated!.toUtc(),
+        ),
+    ];
+  }
 
   /// A book's file was converted or moved: its progress, settings and place
   /// in recent books now belong to [newId] at [path]. If [newId] already
