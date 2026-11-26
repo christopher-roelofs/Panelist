@@ -333,6 +333,10 @@ newer).
   Storage Access Framework (write/replace a document, rename, move, create
   folder, delete) rather than All files access, so the app stays fine for
   Google Play. No trash there: converted originals are deleted.
+  Same work (decided 2026-11-26): comics downloaded from a shared library
+  go into the device's library folder (today they're in app storage,
+  `downloads/<book ID>/`, and vanish with the app's data). Downloading
+  into the library folder on desktops comes with it.
 - Windows (when it gets its turn; never built or run there yet). File
   operations use dart:io and should work, including on a mapped network
   drive (a rename within a share is done by the server, no copying). To

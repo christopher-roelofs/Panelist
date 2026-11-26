@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -13,6 +14,7 @@ import 'package:panelist/library/library_scanner.dart';
 import 'package:panelist/share/library_server.dart';
 import 'package:panelist/share/remote_library.dart';
 import 'package:panelist/share/remote_page_source.dart';
+import 'package:panelist/share/remote_widgets.dart';
 import 'package:panelist/share/share_client.dart';
 import 'package:panelist/share/share_protocol.dart';
 import 'package:path/path.dart' as p;
@@ -177,6 +179,39 @@ void main() {
     );
     await container.read(remoteComicsProvider(lib.id).notifier).refresh();
     expect((await device.book(id))!.title, 'Saga 001 (2012)');
+  });
+
+  test('download all: the queue downloads each comic in turn', () async {
+    final (lib, client) = await pairDevice();
+    final comics = (await client.library())!.comics;
+    client.close();
+    final dirs = Directory(p.join(dir.path, 'device-data'));
+    final container = ProviderContainer(
+      overrides: [
+        databaseProvider.overrideWithValue(device),
+        coversDirProvider.overrideWithValue(
+          Directory(p.join(dirs.path, 'covers')),
+        ),
+        shareDirsProvider.overrideWithValue((
+          cache: Directory(p.join(dirs.path, 'cache')),
+          downloads: Directory(p.join(dirs.path, 'downloads')),
+        )),
+      ],
+    );
+    addTearDown(container.dispose);
+    final keep = container.listen(downloadQueueProvider, (_, _) {});
+    addTearDown(keep.close);
+    // As the app's remote access does.
+    final libs = container.listen(remoteLibrariesProvider, (_, _) {});
+    addTearDown(libs.close);
+    final done = Completer<String>();
+    container
+        .read(downloadQueueProvider.notifier)
+        .add(lib.id, comics, onDone: done.complete);
+    expect(await done.future, 'Downloaded 1 comic');
+    expect(container.read(downloadQueueProvider), isNull);
+    final file = container.read(downloadsProvider)[comics.single.id]!;
+    expect(file.readAsBytesSync(), File(cbz).readAsBytesSync());
   });
 
   test('a download picks up where it stopped', () async {

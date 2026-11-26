@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
+import '../sources/archive_page_source.dart';
 import '../sources/cbz_page_source.dart';
 import '../sources/fingerprint.dart';
 import '../sources/libarchive/libarchive.dart';
@@ -176,7 +177,7 @@ List<_Entry> _extract(LibArchive la, String path, String dir) {
       entries.add((name: name, file: file, crc32: crc, size: size));
     }
   } on LibArchiveException catch (e) {
-    throw ConversionException('Couldn’t read ${p.basename(path)}: $e');
+    throw ConversionException(describeExtractFailure(p.basename(path), e));
   } finally {
     r.close();
   }

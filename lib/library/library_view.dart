@@ -303,6 +303,9 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
       builder: (sheet) => _GroupSheet(
         item: item,
         onMark: _mark,
+        download: item.members.any((c) => isRemoteLocation(c.location))
+            ? DownloadAllButton(comics: item.members)
+            : null,
         onConvert: (comics) {
           Navigator.of(sheet).pop();
           unawaited(convertWithProgress(context, ref, comics));
@@ -1133,6 +1136,7 @@ class _GroupSheet extends StatelessWidget {
   const _GroupSheet({
     required this.item,
     required this.onMark,
+    this.download,
     required this.onEdit,
     required this.onConvert,
     required this.onLookUp,
@@ -1141,6 +1145,9 @@ class _GroupSheet extends StatelessWidget {
   });
 
   final _Item item;
+
+  /// For comics in a computer's shared library: download them all.
+  final Widget? download;
 
   /// Renames the given members' files by the name template.
   final void Function(List<LibraryComic> comics) onRename;
@@ -1193,6 +1200,7 @@ class _GroupSheet extends StatelessWidget {
               all: true,
               onMark: onMark,
               extra: [
+                ?download,
                 if (onEdit != null)
                   OutlinedButton.icon(
                     onPressed: onEdit,

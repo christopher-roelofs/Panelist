@@ -238,6 +238,7 @@ void main() {
               pageCount: 20,
               info: const ComicInfo(series: 'S', number: '1', publisher: 'P'),
               cover: Uint8List.fromList([1, 2, 3]),
+              problem: null,
             );
           }),
         ],

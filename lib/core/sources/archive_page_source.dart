@@ -173,7 +173,7 @@ class ArchivePageSource implements EncodedPageSource {
     RangeError.checkValidIndex(index, _names);
     if (_extracted.contains(index)) return;
     if (_closed) throw StateError('Source is closed');
-    if (_failure != null) throw Exception(_failure);
+    if (_failure != null) throw UnsupportedSourceException(_failure.toString());
     final c = Completer<void>();
     (_waiters[index] ??= []).add(c);
     await c.future;
@@ -188,7 +188,7 @@ class ArchivePageSource implements EncodedPageSource {
 
   void _onFailed(String error) {
     _failure = error;
-    _failWaiters(Exception(error));
+    _failWaiters(UnsupportedSourceException(error));
   }
 
   /// Worker finished (or crashed): anything not extracted by now never will be.
@@ -357,6 +357,14 @@ void _workerMain((SendPort, String, String, String, int) init) {
       r.close();
     }
   } on Object catch (e) {
-    reply.send(('failed', 'Failed to extract $name: $e'));
+    reply.send(('failed', describeExtractFailure(name, e)));
   }
 }
+
+/// Why [name]'s pages couldn't be extracted, for people: libarchive lists
+/// some archives it can't unpack (some RAR 5 files that unrar reads fine).
+String describeExtractFailure(String name, Object error) =>
+    '$name can’t be unpacked here: Panelist’s reader for CBR and other '
+    'archives (libarchive) lists its pages but can’t extract them. The file '
+    'may well be fine — WinRAR or unrar can usually convert it to CBZ, '
+    'which Panelist reads. (libarchive: $error)';

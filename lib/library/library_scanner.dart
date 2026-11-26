@@ -10,6 +10,7 @@ import '../app/providers.dart';
 import '../core/imaging/thumbnail.dart';
 import '../core/metadata/comic_info.dart';
 import '../core/sources/open_source.dart';
+import '../core/sources/page_source.dart';
 import '../data/database.dart';
 import '../platform/android_documents.dart';
 
@@ -28,6 +29,9 @@ typedef ScannedComic = ({
   int pageCount,
   ComicInfo? info,
   Uint8List? cover,
+
+  /// Why its pages can't be read, when it opens but they can't.
+  String? problem,
 });
 
 bool isComicFileName(String name) {
@@ -94,8 +98,12 @@ Future<ScannedComic> readComic(String location) async {
       // Metadata is optional.
     }
     Uint8List? cover;
+    String? problem;
     try {
       cover = await renderThumbnail(source);
+    } on UnsupportedSourceException catch (e) {
+      // It lists but can't be unpacked: still in the list, with the reason.
+      problem = e.message;
     } on Object {
       // A comic without a renderable first page still belongs in the list.
     }
@@ -104,6 +112,7 @@ Future<ScannedComic> readComic(String location) async {
       pageCount: source.pageCount,
       info: info,
       cover: cover,
+      problem: problem,
     );
   } finally {
     await source.close();
@@ -233,6 +242,7 @@ class LibraryScanner extends Notifier<ScanStatus> {
             year: Value(info?.year),
             publisher: Value(info?.publisher),
             title: Value(info?.title),
+            error: Value(c.problem),
           ),
         );
       } on Object catch (error) {

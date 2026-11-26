@@ -353,6 +353,7 @@ class Downloads extends Notifier<Map<String, File>> {
     void Function(int done, int total)? onProgress,
     bool Function()? cancelled,
   }) async {
+    await ref.read(remoteLibrariesProvider.future);
     final client = ref.read(shareClientProvider(library));
     if (client == null) throw const ShareException('Not paired');
     final to = File(p.join(_dir.path, comic.id, comic.fileName));
@@ -413,6 +414,9 @@ Future<PageSource> _openRemote(Ref ref, String location) async {
 /// every few minutes, and when the app comes back), and looks for
 /// libraries that moved to a new address.
 final remoteAccessProvider = Provider<RemoteAccess>((ref) {
+  // Keeps the paired libraries loaded: a provider nothing listens to is
+  // paused, so reading it from a notifier would wait forever.
+  ref.listen(remoteLibrariesProvider, (_, _) {});
   final access = RemoteAccess(ref);
   ref.onDispose(access.dispose);
   return access;

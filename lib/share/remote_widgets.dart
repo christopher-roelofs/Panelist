@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as p;
 
 import '../library/library_model.dart';
 import 'remote_library.dart';
 import 'remote_settings.dart';
 import 'share_client.dart';
+import 'share_protocol.dart';
 
 /// The library header's title: just "Library", or, with paired libraries, a
 /// menu to switch between this device's and theirs.
@@ -219,4 +221,187 @@ String _size(int bytes) {
   if (bytes >= 1 << 30) return '${(bytes / (1 << 30)).toStringAsFixed(1)} GB';
   if (bytes >= 1 << 20) return '${(bytes / (1 << 20)).round()} MB';
   return '${(bytes / 1024).ceil()} KB';
+}
+
+/// Downloads waiting or running, one at a time; null when idle.
+typedef DownloadQueueState = ({
+  int total,
+  int done,
+  double current,
+  String name,
+});
+
+final downloadQueueProvider =
+    NotifierProvider<DownloadQueue, DownloadQueueState?>(DownloadQueue.new);
+
+/// Downloads several comics in turn; keeps going when the sheet that
+/// started it closes.
+class DownloadQueue extends Notifier<DownloadQueueState?> {
+  final _waiting = <(int, RemoteComic)>[];
+  bool _stop = false;
+  int _total = 0, _done = 0, _failed = 0;
+  String? _lastError;
+
+  @override
+  DownloadQueueState? build() => null;
+
+  /// Adds [comics] from [library]; [onDone] gets a summary when the queue
+  /// empties.
+  void add(
+    int library,
+    List<RemoteComic> comics, {
+    void Function(String summary)? onDone,
+  }) {
+    final queued = {for (final (_, c) in _waiting) c.id};
+    final fresh = [
+      for (final c in comics)
+        if (queued.add(c.id)) c,
+    ];
+    if (fresh.isEmpty) return;
+    _waiting.addAll([for (final c in fresh) (library, c)]);
+    _total += fresh.length;
+    if (state == null) unawaited(_run(onDone));
+  }
+
+  void stop() {
+    _stop = true;
+    _waiting.clear();
+  }
+
+  Future<void> _run(void Function(String summary)? onDone) async {
+    _stop = false;
+    while (_waiting.isNotEmpty && !_stop) {
+      final (library, comic) = _waiting.removeAt(0);
+      state = (
+        total: _total,
+        done: _done,
+        current: 0,
+        name: p.basenameWithoutExtension(comic.fileName),
+      );
+      try {
+        await ref
+            .read(downloadsProvider.notifier)
+            .download(
+              library,
+              comic,
+              onProgress: (d, t) {
+                if (t > 0 && ref.mounted && state != null) {
+                  state = (
+                    total: _total,
+                    done: _done,
+                    current: d / t,
+                    name: state!.name,
+                  );
+                }
+              },
+              cancelled: () => _stop,
+            );
+        _done++;
+      } on ShareException catch (e) {
+        if (!_stop) {
+          _failed++;
+          _lastError = e.message;
+        }
+      }
+      if (!ref.mounted) return;
+    }
+    final summary = [
+      'Downloaded ${_done == 1 ? '1 comic' : '$_done comics'}',
+      if (_stop) 'stopped',
+      if (_failed > 0) '$_failed failed: $_lastError',
+    ].join(' · ');
+    _total = _done = _failed = 0;
+    _lastError = null;
+    state = null;
+    onDone?.call(summary);
+  }
+}
+
+/// In a paired library's group sheet: download every comic in it.
+class DownloadAllButton extends ConsumerWidget {
+  const DownloadAllButton({super.key, required this.comics});
+  final List<LibraryComic> comics;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final queue = ref.watch(downloadQueueProvider);
+    if (queue != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 140,
+            child: LinearProgressIndicator(
+              value: (queue.done + queue.current) / queue.total,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('${queue.done + 1} of ${queue.total}'),
+          TextButton(
+            onPressed: () => ref.read(downloadQueueProvider.notifier).stop(),
+            child: const Text('Stop'),
+          ),
+        ],
+      );
+    }
+    final downloads = ref.watch(downloadsProvider);
+    final byLibrary = <int, List<RemoteComic>>{};
+    var size = 0;
+    var have = 0;
+    for (final c in comics) {
+      final where = parseRemoteLocation(c.location);
+      if (where == null) continue;
+      if (downloads.containsKey(where.bookId)) {
+        have++;
+        continue;
+      }
+      final remote = ref
+          .read(remoteComicsProvider(where.library))
+          .comics
+          .where((r) => r.id == where.bookId)
+          .firstOrNull;
+      if (remote == null) continue;
+      byLibrary.putIfAbsent(where.library, () => []).add(remote);
+      size += remote.size;
+    }
+    final missing = byLibrary.values.fold(0, (n, l) => n + l.length);
+    if (missing == 0) {
+      if (have == 0) return const SizedBox.shrink();
+      return OutlinedButton.icon(
+        onPressed: () async {
+          for (final c in comics) {
+            if (parseRemoteLocation(c.location) case final where?) {
+              await ref.read(downloadsProvider.notifier).remove(where.bookId);
+            }
+          }
+        },
+        icon: const Icon(Icons.download_done),
+        label: Text(
+          have == 1 ? 'Downloaded · Remove' : 'All $have downloaded · Remove',
+        ),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: () {
+        final messenger = ScaffoldMessenger.of(context);
+        for (final MapEntry(key: library, value: list) in byLibrary.entries) {
+          ref
+              .read(downloadQueueProvider.notifier)
+              .add(
+                library,
+                list,
+                onDone: (s) =>
+                    messenger.showSnackBar(SnackBar(content: Text(s))),
+              );
+        }
+      },
+      icon: const Icon(Icons.download_outlined),
+      label: Text(
+        missing == 1
+            ? 'Download 1 (${_size(size)})'
+            : 'Download ${have > 0 ? '$missing more' : 'all $missing'} '
+                  '(${_size(size)})',
+      ),
+    );
+  }
 }
