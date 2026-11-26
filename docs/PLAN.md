@@ -45,7 +45,7 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
 | M3 ✅ | Double-page spreads (auto wide-page detection, cover offset), per-book settings, ComicInfo.xml | Spreads read correctly |
 | M4 ✅ | Android: SAF file access, "Open with" intents, touch tuning, memory tuning on phones | Usable on Android phone + tablet |
 | M5 ✅ | Library: library folders, thumbnails, continue reading, Folders / Series / Publishers views | Home screen with Continue Reading |
-| M6 | Metadata management (desktop): book IDs that ignore metadata files; ComicInfo editor (one issue, then bulk); save into archives (CBZ in place, CBR→CBZ, via temp file); Metron lookup (ComicVine optional); rename/organise by template, promo clean-up, publisher aliases. Builds on the ComicTools ideas | The PC library can be tagged and organised from Panelist |
+| M6 | Metadata management (desktop): book IDs that ignore metadata files; ComicInfo editor (one issue, then bulk); save into archives (CBZ in place, CBR→CBZ, via temp file); Metron and Comic Vine lookup; rename/organise by template, promo clean-up, publisher aliases. Builds on the ComicTools ideas | The PC library can be tagged and organised from Panelist |
 | M7 | Library over the local network: the desktop app serves the library (OPDS-style); phone/tablet browse, read or download from it, and send reading progress back (also for comics copied onto the device). Metadata is edited on the PC only | Progress read on the tablet shows on the PC |
 | Later | RTL manga, webtoon scroll, panel zoom, OPDS/Komga, Windows/macOS/iOS, AVIF/JXL | |
 
@@ -210,6 +210,23 @@ newer).
   Title when Metron has no title of its own: all story titles joined with
   "; " (decided). Step 5 (rename by template) should default to a template
   without `{title}` (e.g. `{series} {number} ({year})`) and shorten
-  `{title}` when used (anthologies list one story per serial). Anthology titles (one story per
-  serial) are joined with "; " (titles contain commas). ComicVine stays
-  optional/later.
+  `{title}` when used (anthologies list one story per serial). Anthology
+  titles are joined with "; " (titles contain commas).
+- Lookup providers (M6, desktop): `lib/core/metadata/lookup/`. A
+  `LookupProvider` only searches (`search`, `searchSeries`), fetches and
+  applies (`apply`), reads its own ID marker (`knownId`) and lists series
+  aliases; the matching (`findIssue`, `searchForms`, `chooseMatch`, series
+  memory) is shared, and `ApiClient` does spacing, 429/420 retries and the
+  cache (`lookup.json`; keys never cached). Metron: `[issue_id:N]`, 3.1 s
+  apart. Comic Vine: volume search, then one `issues/` filter over the
+  same-named volumes (`volume:A|B,issue_number:N`), detail
+  `issue/4000-N/` plus `volume/4050-N/`; `[Issue ID N]` like ComicTagger
+  (also reads `[CVDBN]` and a 4000- Web link); description HTML to text;
+  1.1 s apart (CV allows ~200/hour per resource). Settings → Comic details:
+  one key per service and "Look up first on". Buttons say "Look up info".
+  Batch: per comic, a known ID of any provider wins; else providers in
+  order until one is sure; a key refused / limit reached drops that
+  provider for the run. The choose dialog searches in order until
+  something fits, with "Search <next> too". A publisher in ComicInfo breaks
+  ties between same-named series. Adding a provider: a class plus an entry
+  in `lookupServices`.

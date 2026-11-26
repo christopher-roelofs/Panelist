@@ -10,13 +10,13 @@ import 'package:path_provider/path_provider.dart';
 
 import 'app/providers.dart';
 import 'app/theme.dart';
-import 'core/metadata/metron_cache.dart';
+import 'core/metadata/lookup/lookup_cache.dart';
 import 'core/sources/archive_page_source.dart';
 import 'data/database.dart';
 import 'home/home_screen.dart';
+import 'library/info_lookup.dart';
 import 'library/library_providers.dart';
 import 'library/library_scanner.dart';
-import 'library/metron_lookup.dart';
 import 'platform/android_documents.dart';
 import 'reader/open_book.dart';
 
@@ -33,9 +33,9 @@ Future<void> main(List<String> args) async {
   final defaults = await ReaderDefaultsNotifier.load(db);
   final libraryPrefs = await LibraryPrefsNotifier.load(db);
   final appTheme = await AppThemeNotifier.load(db);
-  final metronCache = MetronCache(
+  final lookupCache = LookupCache(
     file: File(
-      p.join((await getApplicationCacheDirectory()).path, 'metron.json'),
+      p.join((await getApplicationCacheDirectory()).path, 'lookup.json'),
     ),
   );
   final covers = Directory(
@@ -53,7 +53,7 @@ Future<void> main(List<String> args) async {
           () => LibraryPrefsNotifier(libraryPrefs),
         ),
         coversDirProvider.overrideWithValue(covers),
-        metronCacheProvider.overrideWithValue(metronCache),
+        lookupCacheProvider.overrideWithValue(lookupCache),
         appThemeProvider.overrideWith(() => AppThemeNotifier(appTheme)),
       ],
       child: PanelistApp(initialPath: args.isEmpty ? null : args.first),

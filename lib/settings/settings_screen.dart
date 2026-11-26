@@ -4,9 +4,9 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app/theme.dart';
 import '../library/comic_info_editor.dart';
+import '../library/info_lookup.dart';
 import '../library/library_providers.dart';
 import '../library/library_settings_screen.dart';
-import '../library/metron_lookup.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -84,17 +84,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
           if (canEditMetadata) ...[
             heading('Comic details'),
-            ListTile(
-              leading: const Icon(Icons.travel_explore),
-              title: const Text('Metron API token'),
-              subtitle: Text(
-                ref.watch(metronTokenProvider).value == null
-                    ? 'Not set: needed to look up comic details on Metron'
-                    : 'Set',
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => editMetronToken(context, ref),
-            ),
+            const LookupSettings(),
           ],
           heading('Library'),
           ListTile(

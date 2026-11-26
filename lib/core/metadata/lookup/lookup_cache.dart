@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-/// Metron answers kept between runs, so looking the same comics up again
-/// costs no requests, plus which Metron series a name from a file turned out
-/// to be. Kept in one JSON file (in memory only when [file] is null).
-class MetronCache {
-  MetronCache({this.file, DateTime Function()? clock})
+/// Lookup answers kept between runs, so looking the same comics up again
+/// costs no requests, plus which series a name from a file turned out to be
+/// at each provider. Kept in one JSON file (in memory only when [file] is
+/// null). Keys never contain API keys.
+class LookupCache {
+  LookupCache({this.file, DateTime Function()? clock})
     : _clock = clock ?? DateTime.now;
 
   final File? file;
@@ -34,7 +35,7 @@ class MetronCache {
     _save();
   }
 
-  /// The Metron series ID a (normalised) series name from a file was
+  /// The series ID [name] (provider-prefixed, normalised, from a file) was
   /// found to be.
   int? seriesFor(String name) {
     _load();

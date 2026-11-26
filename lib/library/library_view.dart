@@ -11,11 +11,11 @@ import '../reader/open_book.dart';
 import 'bulk_field_editor.dart';
 import 'comic_info_editor.dart';
 import 'convert_comics.dart';
+import 'info_lookup.dart';
 import 'library_model.dart';
 import 'library_providers.dart';
 import 'library_scanner.dart';
 import 'library_settings_screen.dart';
-import 'metron_lookup.dart';
 
 /// The home screen's scrolling body: [leading] slivers (Continue reading),
 /// then the library, browsable by folder, series or publisher. Back goes
@@ -859,7 +859,7 @@ class _DetailsSheet extends StatelessWidget {
 
   final LibraryComic comic;
 
-  /// Looks the comic up on Metron; null where it can't be.
+  /// Looks the comic's details up; null where it can't be.
   final VoidCallback? onLookUp;
   final _OnMark onMark;
 
@@ -919,7 +919,7 @@ class _DetailsSheet extends StatelessWidget {
                     OutlinedButton.icon(
                       onPressed: onLookUp,
                       icon: const Icon(Icons.travel_explore),
-                      label: const Text('Look up on Metron'),
+                      label: const Text('Look up info'),
                     ),
                 ],
               ),
@@ -1052,7 +1052,7 @@ class _GroupSheet extends StatelessWidget {
 
   final _Item item;
 
-  /// Looks the given members up on Metron.
+  /// Looks the given members' details up.
   final void Function(List<LibraryComic> comics) onLookUp;
   final _OnMark onMark;
 
@@ -1116,8 +1116,8 @@ class _GroupSheet extends StatelessWidget {
                     icon: const Icon(Icons.travel_explore),
                     label: Text(
                       taggable.length == 1
-                          ? 'Look up 1 on Metron'
-                          : 'Look up ${taggable.length} on Metron',
+                          ? 'Look up info for 1'
+                          : 'Look up info for ${taggable.length}',
                     ),
                   ),
                 if (convertible.isNotEmpty)

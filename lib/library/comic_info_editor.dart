@@ -9,15 +9,14 @@ import '../app/providers.dart';
 import '../core/metadata/comic_info.dart';
 import '../core/metadata/comic_info_document.dart';
 import '../core/metadata/comic_info_writer.dart';
-import '../core/metadata/metron.dart';
 import '../core/sources/fingerprint.dart';
 import '../core/sources/open_source.dart';
 import '../data/book_extensions.dart';
 import '../platform/android_documents.dart';
+import 'info_lookup.dart';
 import 'library_model.dart';
 import 'library_scanner.dart';
 import 'library_view.dart' show LibraryCover;
-import 'metron_lookup.dart';
 
 /// Whether this platform edits metadata (desktop: the library lives there,
 /// and batch tagging is desk work).
@@ -169,7 +168,7 @@ class ComicInfoEditor extends ConsumerStatefulWidget {
 
   final LibraryComic comic;
 
-  /// Start by looking the comic up on Metron.
+  /// Start by looking the comic's details up.
   final bool lookUp;
 
   @override
@@ -233,8 +232,8 @@ class _ComicInfoEditorState extends ConsumerState<ComicInfoEditor> {
       _fields.every((f) => f.validate(_controllers[f.name]!.text) == null);
 
   /// Fills empty Series, Number and Year from the folder and file names.
-  /// Searches Metron and fills the form with the chosen issue's details,
-  /// for the user to check and save.
+  /// Searches the lookup services and fills the form with the chosen
+  /// issue's details, for the user to check and save.
   Future<void> _lookUp() async {
     final doc = _doc;
     if (doc == null) return;
@@ -244,25 +243,26 @@ class _ComicInfoEditorState extends ConsumerState<ComicInfoEditor> {
       return v.isEmpty ? null : v;
     }
 
-    final issue = await chooseMetronIssue(
-      context,
-      ref,
-      series: value('Series') ?? guess.series ?? '',
-      number: value('Number') ?? guess.number ?? '',
-      year: int.tryParse(value('Year') ?? '') ?? guess.year,
-    );
-    if (issue == null || !mounted) return;
     // Apply to a copy holding the form's current values, then show it.
     final copy = ComicInfoDocument.parse(doc.toXmlString());
     for (final f in _fields) {
       copy[f.name] = _controllers[f.name]!.text;
     }
-    applyMetronIssue(copy, issue);
+    final source = await chooseIssue(
+      context,
+      ref,
+      doc: copy,
+      series: value('Series') ?? guess.series ?? '',
+      number: value('Number') ?? guess.number ?? '',
+      year: int.tryParse(value('Year') ?? '') ?? guess.year,
+      publisher: value('Publisher'),
+    );
+    if (source == null || !mounted) return;
     for (final f in _fields) {
       _controllers[f.name]!.text = copy[f.name] ?? '';
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Filled from Metron: check, then save')),
+      SnackBar(content: Text('Filled from $source: check, then save')),
     );
   }
 
@@ -358,7 +358,7 @@ class _ComicInfoEditorState extends ConsumerState<ComicInfoEditor> {
                 TextButton.icon(
                   onPressed: doc == null || _saving ? null : _lookUp,
                   icon: const Icon(Icons.travel_explore),
-                  label: const Text('Look up on Metron'),
+                  label: const Text('Look up info'),
                 ),
                 const SizedBox(width: 8),
                 Padding(
