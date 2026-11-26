@@ -41,6 +41,7 @@ Future<void> main(List<String> args) async {
     final place = await db.placeInLibrary(location);
     return place == null ? null : (tree: place.root, path: place.path);
   };
+  ComicFiles.moved = db.relocate;
   final defaults = await ReaderDefaultsNotifier.load(db);
   final libraryPrefs = await LibraryPrefsNotifier.load(db);
   final appTheme = await AppThemeNotifier.load(db);

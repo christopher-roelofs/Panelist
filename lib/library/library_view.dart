@@ -586,8 +586,10 @@ class _Header extends StatelessWidget {
           runSpacing: 8,
           children: [
             const LibrarySourcePicker(),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            // The buttons go under the views on a phone.
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.end,
               children: [
                 SegmentedButton<LibraryView>(
                   showSelectedIcon: false,
@@ -764,7 +766,7 @@ class _Tile extends StatelessWidget {
     final scheme = theme.colorScheme;
     final c = item.comic;
     Widget cover = LibraryCover(comic: c);
-    if (item.kind == _Kind.group) {
+    if (item.kind == _Kind.group && item.members.length > 1) {
       // Edges of the next covers, for a stack.
       Widget edge(double inset, Color color) => Positioned(
         left: inset * 2,
@@ -1203,7 +1205,7 @@ class _GroupSheet extends StatelessWidget {
               comics: item.members,
               showRead: read < n,
               showUnread: unread < n,
-              all: true,
+              all: n > 1,
               onMark: onMark,
               extra: [
                 ?download,
@@ -1218,8 +1220,8 @@ class _GroupSheet extends StatelessWidget {
                     onPressed: () => onLookUp(taggable),
                     icon: const Icon(Icons.travel_explore),
                     label: Text(
-                      taggable.length == 1
-                          ? 'Look up info for 1'
+                      n == 1
+                          ? 'Look up info'
                           : 'Look up info for ${taggable.length}',
                     ),
                   ),
@@ -1234,9 +1236,7 @@ class _GroupSheet extends StatelessWidget {
                     onPressed: () => onRename(renamable),
                     icon: const Icon(Icons.account_tree_outlined),
                     label: Text(
-                      renamable.length == 1
-                          ? 'Organize 1…'
-                          : 'Organize ${renamable.length}…',
+                      n == 1 ? 'Organize…' : 'Organize ${renamable.length}…',
                     ),
                   ),
                 if (convertible.isNotEmpty)
@@ -1244,8 +1244,8 @@ class _GroupSheet extends StatelessWidget {
                     onPressed: () => onConvert(convertible),
                     icon: const Icon(Icons.transform),
                     label: Text(
-                      convertible.length == 1
-                          ? 'Convert 1 to CBZ'
+                      n == 1
+                          ? 'Convert to CBZ'
                           : 'Convert ${convertible.length} to CBZ',
                     ),
                   ),

@@ -458,6 +458,8 @@ class _RenameDialogState extends ConsumerState<_RenameDialog> {
     final plans = problem == null ? _plan() : const <RenamePlan>[];
     final moving = plans.where((r) => r.state == RenameState.rename).toList();
     final organise = _template.text.contains('/');
+    final inPlace =
+        plans.isNotEmpty && plans.every((r) => r.state == RenameState.same);
     final roots = _roots;
     final done = _done;
     final busy = done != null;
@@ -588,8 +590,14 @@ class _RenameDialogState extends ConsumerState<_RenameDialog> {
               [
                 if (moving.isNotEmpty)
                   '${moving.length} to ${organise ? 'move' : 'rename'}.',
-                if (skipped.isNotEmpty) 'Left as they are: $skipped.',
-                if (organise)
+                if (inPlace)
+                  plans.length == 1
+                      ? 'Already in place with this layout: nothing to do.'
+                      : 'All ${plans.length} are already in place with this '
+                            'layout: nothing to do.'
+                else if (skipped.isNotEmpty)
+                  'Left as they are: $skipped.',
+                if (organise && moving.isNotEmpty)
                   'Folders left empty are removed; nothing is overwritten.',
               ].join(' '),
               style: theme.textTheme.bodySmall,
@@ -679,11 +687,15 @@ class _RenameDialogState extends ConsumerState<_RenameDialog> {
         else
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text(inPlace ? 'Close' : 'Cancel'),
           ),
         FilledButton(
           onPressed: busy || moving.isEmpty ? null : () => _rename(moving),
-          child: Text('${organise ? 'Move' : 'Rename'} ${moving.length}'),
+          child: Text(
+            moving.isEmpty
+                ? 'Nothing to ${organise ? 'move' : 'rename'}'
+                : '${organise ? 'Move' : 'Rename'} ${moving.length}',
+          ),
         ),
       ],
     );

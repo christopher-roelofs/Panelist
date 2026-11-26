@@ -26,6 +26,29 @@ void main() {
     expect(again.path, '/moved/a.cbz');
   });
 
+  test('a comic saved to a new address keeps its entry and progress', () async {
+    await db.addRoot('content://tree', 'Comics');
+    final root = (await db.roots()).single.id;
+    await db.putEntry(
+      LibraryEntriesCompanion.insert(
+        location: 'content://old',
+        rootId: root,
+        folder: 'Saga',
+        fileName: 'a.cbz',
+        size: 1,
+        modified: 0,
+      ),
+    );
+    await open('book', path: 'content://old');
+    await db.saveProgress('book', 7);
+
+    await db.relocate('content://old', 'content://new');
+    expect(await db.entryAt('content://old'), isNull);
+    expect((await db.entryAt('content://new'))!.folder, 'Saga');
+    final book = (await db.book('book'))!;
+    expect((book.path, book.currentPage), ('content://new', 7));
+  });
+
   test('recents are ordered by last opened and can be forgotten', () async {
     await open('first');
     await Future<void>.delayed(const Duration(milliseconds: 5));

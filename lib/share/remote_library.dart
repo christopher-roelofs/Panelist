@@ -320,6 +320,26 @@ final shownComicsProvider = Provider<List<LibraryComic>>((ref) {
 
 // --- Downloads -----------------------------------------------------------
 
+/// Where a comic from another computer goes under [root]: in [folder] (its
+/// folders there, `/`-separated) as [fileName]. The names are the other
+/// computer's word, so nothing in them can lead out of [root].
+String downloadPath(String root, String folder, String fileName) {
+  Iterable<String> parts(String s) => s
+      .split(RegExp(r'[/\\]'))
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty && part != '.' && part != '..')
+      .map(localFileName);
+  final path = p.joinAll([
+    root,
+    ...parts(folder),
+    parts(fileName).lastOrNull ?? 'comic',
+  ]);
+  if (!p.isWithin(root, path)) {
+    throw ShareException('That comic’s name can’t be used here: $fileName');
+  }
+  return path;
+}
+
 /// Comics downloaded from shared libraries: book ID → file. Each lives at
 /// `downloads/<book ID>/<file name>`.
 final downloadsProvider = NotifierProvider<Downloads, Map<String, File>>(
@@ -352,8 +372,14 @@ class Downloads extends Notifier<Map<String, File>> {
     } on FileSystemException {
       // None yet.
     }
-    return found;
+    // Ones just downloaded into a library folder stay until the scan has
+    // read them (the library changes for other reasons meanwhile).
+    _unscanned.removeWhere((id, _) => found.containsKey(id));
+    return {..._unscanned, ...found};
   }
+
+  /// Downloaded into a library folder in this run, not in the library yet.
+  final _unscanned = <String, File>{};
 
   /// Whether [bookId]'s copy is a download [remove] can delete, not a comic
   /// in a library folder.
@@ -369,17 +395,14 @@ class Downloads extends Notifier<Map<String, File>> {
         .firstOrNull;
     if (root == null) {
       return File(
-        p.join(_dir.path, idFileName(comic.id), localFileName(comic.fileName)),
+        downloadPath(
+          p.join(_dir.path, idFileName(comic.id)),
+          '',
+          comic.fileName,
+        ),
       );
     }
-    return File(
-      p.joinAll([
-        root.location,
-        for (final f in comic.folder.split('/'))
-          if (f.isNotEmpty) localFileName(f),
-        localFileName(comic.fileName),
-      ]),
-    );
+    return File(downloadPath(root.location, comic.folder, comic.fileName));
   }
 
   /// Downloads [comic] from [library].
@@ -407,6 +430,7 @@ class Downloads extends Notifier<Map<String, File>> {
     );
     state = {...state, comic.id: to};
     if (!to.path.startsWith(_dir.path)) {
+      _unscanned[comic.id] = to;
       unawaited(ref.read(libraryScanProvider.notifier).scan());
     }
     return to;

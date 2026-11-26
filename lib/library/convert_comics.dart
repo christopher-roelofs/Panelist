@@ -119,6 +119,8 @@ Future<bool> moveToTrash(String path) async {
 /// The Recycle Bin, through .NET (no extra package). Network drives have
 /// none (Windows would delete for good), so a file there is kept. The path
 /// goes in through the environment, never into the command's text.
+const _recycleTimeout = Duration(seconds: 30);
+
 Future<bool> _recycle(String path) async {
   const script = r'''
 $p = $env:PANELIST_TRASH
@@ -130,12 +132,23 @@ Add-Type -AssemblyName Microsoft.VisualBasic
 [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, 'OnlyErrorDialogs', 'SendToRecycleBin')
 ''';
   try {
-    final r = await Process.run(
+    final process = await Process.start(
       'powershell.exe',
       ['-NoProfile', '-NonInteractive', '-Command', script],
       environment: {'PANELIST_TRASH': path},
     );
-    return r.exitCode == 0 && !File(path).existsSync();
+    unawaited(process.stdout.drain<void>());
+    unawaited(process.stderr.drain<void>());
+    // Windows can stop to show an error (a file in use) in a window nobody
+    // sees: don't wait on it, keep the file.
+    final code = await process.exitCode.timeout(
+      _recycleTimeout,
+      onTimeout: () {
+        process.kill();
+        return -1;
+      },
+    );
+    return code == 0 && !File(path).existsSync();
   } on ProcessException {
     return false;
   }

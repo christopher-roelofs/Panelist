@@ -48,7 +48,7 @@ class LibraryWatcher {
     for (final root in roots) {
       if (AndroidDocuments.isContentUri(root)) continue;
       if (recursive) {
-        if (Directory(root).existsSync()) folders.add(p.normalize(root));
+        if (await Directory(root).exists()) folders.add(p.normalize(root));
       } else {
         folders.addAll(await _foldersIn(root));
       }

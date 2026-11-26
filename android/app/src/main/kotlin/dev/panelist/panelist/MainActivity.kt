@@ -182,11 +182,30 @@ class MainActivity : FlutterActivity() {
         while (pending.isNotEmpty()) {
             val (docId, folder) = pending.removeFirst()
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId)
+            val names = HashSet<String>()
+            // Files under a working name: (id, real name, size, modified).
+            val stranded = ArrayList<Stranded>()
             contentResolver.query(children, columns, null, null, null)?.use { c ->
                 while (c.moveToNext()) {
                     val id = c.getString(0)
                     val name = c.getString(1) ?: continue
-                    if (name.startsWith(".")) continue
+                    names.add(name)
+                    if (name.startsWith(".")) {
+                        val real = realName(name)
+                        if (real != null &&
+                            c.getString(2) != DocumentsContract.Document.MIME_TYPE_DIR
+                        ) {
+                            stranded.add(
+                                Stranded(
+                                    id,
+                                    real,
+                                    if (c.isNull(3)) 0L else c.getLong(3),
+                                    if (c.isNull(4)) 0L else c.getLong(4),
+                                ),
+                            )
+                        }
+                        continue
+                    }
                     if (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) {
                         pending.add(id to if (folder.isEmpty()) name else "$folder/$name")
                     } else {
@@ -202,8 +221,49 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+            // A save or move that was cut short (the app was closed) can
+            // leave a comic under its working name only: give it its name
+            // back, or it would be missing from the library.
+            for (s in stranded) {
+                if (s.name in names) continue
+                try {
+                    val uri = DocumentsContract.renameDocument(
+                        contentResolver,
+                        docUri(tree, s.id),
+                        s.name,
+                    ) ?: docUri(tree, s.id)
+                    names.add(s.name)
+                    out.add(
+                        mapOf(
+                            "uri" to uri.toString(),
+                            "folder" to folder,
+                            "name" to s.name,
+                            "size" to s.size,
+                            "modified" to s.modified,
+                        ),
+                    )
+                } catch (_: Exception) {
+                    // Read-only, or the provider refused: as it was.
+                }
+            }
         }
         return out
+    }
+
+    private class Stranded(val id: String, val name: String, val size: Long, val modified: Long)
+
+    /**
+     * The name a file had before [replace] or [move] set it aside as
+     * [working], or null if it isn't one of theirs. (Not the new version
+     * being written, `.panelist-saving`: that one may be incomplete.)
+     */
+    private fun realName(working: String): String? {
+        for (suffix in listOf(".panelist-old", ".panelist-moving", ".panelist-renaming")) {
+            if (working.length > suffix.length + 1 && working.endsWith(suffix)) {
+                return working.substring(1, working.length - suffix.length)
+            }
+        }
+        return null
     }
 
     @Deprecated("Deprecated in Java")
@@ -257,7 +317,8 @@ class MainActivity : FlutterActivity() {
         try {
             contentResolver.releasePersistableUriPermission(
                 uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
         } catch (_: SecurityException) {
         }
@@ -448,19 +509,52 @@ class MainActivity : FlutterActivity() {
             if (moving != fromName) {
                 uri = DocumentsContract.renameDocument(contentResolver, uri, moving) ?: uri
             }
+            val before = uri
             uri = try {
-                DocumentsContract.moveDocument(
-                    contentResolver,
-                    uri,
-                    docUri(tree, fromParent),
-                    docUri(tree, toParent),
-                ) ?: throw UnsupportedOperationException()
-            } catch (_: UnsupportedOperationException) {
-                copyThenDelete(tree, uri, toParent, moving)
+                try {
+                    DocumentsContract.moveDocument(
+                        contentResolver,
+                        uri,
+                        docUri(tree, fromParent),
+                        docUri(tree, toParent),
+                    ) ?: throw UnsupportedOperationException()
+                } catch (_: UnsupportedOperationException) {
+                    copyThenDelete(tree, uri, toParent, moving)
+                }
+            } catch (e: Exception) {
+                // Still where it was: under its own name again.
+                if (moving != fromName) {
+                    try {
+                        DocumentsContract.renameDocument(contentResolver, before, fromName)
+                    } catch (_: Exception) {
+                    }
+                }
+                throw e
             }
         }
         if (displayName(uri) != toName) {
-            uri = renameTo(uri, toName)
+            val moved = uri
+            uri = try {
+                renameTo(uri, toName)
+            } catch (e: Exception) {
+                // Moved, but the new name was refused: back where it was,
+                // under its own name, rather than left under a hidden one.
+                if (toParent != fromParent) {
+                    try {
+                        val back = DocumentsContract.moveDocument(
+                            contentResolver,
+                            moved,
+                            docUri(tree, toParent),
+                            docUri(tree, fromParent),
+                        ) ?: moved
+                        if (displayName(back) != fromName) {
+                            DocumentsContract.renameDocument(contentResolver, back, fromName)
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+                throw e
+            }
         }
         return uri.toString()
     }
@@ -474,7 +568,15 @@ class MainActivity : FlutterActivity() {
                 uri,
                 ".$name.panelist-renaming",
             ) ?: uri
-            return DocumentsContract.renameDocument(contentResolver, step, name) ?: step
+            return try {
+                DocumentsContract.renameDocument(contentResolver, step, name) ?: step
+            } catch (e: Exception) {
+                try {
+                    DocumentsContract.renameDocument(contentResolver, step, current)
+                } catch (_: Exception) {
+                }
+                throw e
+            }
         }
         return DocumentsContract.renameDocument(contentResolver, uri, name) ?: uri
     }

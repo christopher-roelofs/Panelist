@@ -84,16 +84,56 @@ void main() {
       await tester.pumpAndSettle();
       await _rightClick(tester, find.text(title).last);
       await tester.pumpAndSettle();
-      expect(find.text('Mark all as read'), findsOneWidget);
+      // One comic in it: no "all", no counts.
+      expect(find.text('Mark as read'), findsOneWidget);
       // Desktop only (tests run on the host, which is desktop).
       expect(find.text(button), findsOneWidget);
-      expect(find.text('Organize 1…'), findsOneWidget);
+      expect(find.text('Organize…'), findsOneWidget);
       await tester.tap(find.text(button));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
     });
   }
+
+  testWidgets('the library header fits a phone', (tester) async {
+    tester.view
+      ..physicalSize = const Size(360, 780)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          coversDirProvider.overrideWithValue(Directory('/nowhere')),
+          remoteLibrariesProvider.overrideWith((ref) => Stream.value([])),
+          libraryRootsProvider.overrideWith(
+            (ref) => Stream.value([
+              const LibraryRoot(id: 1, location: '/nowhere', name: 'C'),
+            ]),
+          ),
+          libraryComicsProvider.overrideWithValue([comic]),
+          libraryPrefsProvider.overrideWith(
+            () => LibraryPrefsNotifier((
+              view: LibraryView.series,
+              layout: LibraryLayout.grid,
+            )),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: LibraryBrowser(onOpenFile: () {})),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // An overflow would have thrown; and the buttons can be tapped.
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('Show as list'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Show as grid'), findsOneWidget);
+  });
 
   testWidgets('a folder, or the library folder, covers all subfolders', (
     tester,

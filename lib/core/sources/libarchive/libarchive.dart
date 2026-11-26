@@ -212,6 +212,7 @@ class ArchiveReader {
   final _entry = calloc<Pointer<LaEntry>>();
   Pointer<Uint8>? _buffer;
   static const _bufferSize = 1 << 20;
+  static const _rar5PastEnd = 'Unsupported block header size';
 
   /// Advances to the next entry. Returns false at the end of the archive.
   bool next() {
@@ -249,19 +250,18 @@ class ArchiveReader {
       if (n < 0) {
         if (n == archiveRetry || n == archiveWarn) continue;
         // libarchive's RAR 5 reader can miss the end of an entry and read
-        // one block past it ("Unsupported block header size"), after the
-        // whole entry has come out (files by recent WinRAR versions;
-        // checked against unrar byte for byte). The data is complete and
-        // the next header is still readable, so take it. (It reports this
-        // as fatal; if the archive really were unusable, the next header
-        // fails as usual.)
-        if ((n == archiveFailed || n == archiveFatal) &&
-            size != null &&
-            size > 0 &&
-            delivered == size) {
+        // one block past it, after the whole entry has come out (files by
+        // recent WinRAR versions; checked against unrar byte for byte).
+        // The data is complete and the next header is still readable, so
+        // take it. Only that error: others that come after the last byte
+        // (a failed checksum) mean the data is wrong.
+        final message = _la.error(_a);
+        if (delivered == size &&
+            delivered > 0 &&
+            message.contains(_rar5PastEnd)) {
           return true;
         }
-        throw LibArchiveException(_la.error(_a));
+        throw LibArchiveException(message);
       }
       sink(buf, n);
       delivered += n;

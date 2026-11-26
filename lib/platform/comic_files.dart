@@ -57,11 +57,36 @@ abstract final class ComicFiles {
       } finally {
         await doc.release?.call();
       }
-      await AndroidDocuments.replace(place.tree, place.path, target.path);
+      final uri = await AndroidDocuments.replace(
+        place.tree,
+        place.path,
+        target.path,
+      );
+      // Some storage (cards, cloud folders) gives the saved file a new
+      // address: the old one is dead.
+      if (uri != location) {
+        _movedTo[location] = uri;
+        await moved?.call(location, uri);
+      }
       return result;
     } finally {
       if (target.existsSync()) await target.delete();
     }
+  }
+
+  /// Told when saving gave a comic a new address (set in `main`): the
+  /// library and reading progress follow it.
+  static Future<void> Function(String from, String to)? moved;
+
+  static final _movedTo = <String, String>{};
+
+  /// Where the comic once at [location] is now (see [moved]).
+  static String now(String location) {
+    var at = location;
+    for (var next = _movedTo[at]; next != null; next = _movedTo[at]) {
+      at = next;
+    }
+    return at;
   }
 
   /// [location]'s file name, for messages (a content URI's last part).

@@ -214,6 +214,21 @@ void main() {
     expect(file.readAsBytesSync(), File(cbz).readAsBytesSync());
   });
 
+  test('names from the other computer can’t lead out of the folder', () {
+    final root = p.join(Directory.systemTemp.path, 'lib');
+    expect(
+      downloadPath(root, 'Image/Saga', 'Saga 001.cbz'),
+      p.join(root, 'Image', 'Saga', 'Saga 001.cbz'),
+    );
+    expect(
+      downloadPath(root, '../../.config/autostart', 'x.cbz'),
+      p.join(root, '.config', 'autostart', 'x.cbz'),
+    );
+    expect(downloadPath(root, '', '../../x.cbz'), p.join(root, 'x.cbz'));
+    expect(downloadPath(root, r'..\..', r'a\..\x.cbz'), p.join(root, 'x.cbz'));
+    expect(downloadPath(root, '/etc', '..'), p.join(root, 'etc', 'comic'));
+  });
+
   test('downloads go into the library folder, in the same folders', () async {
     final (lib, client) = await pairDevice();
     final comic = (await client.library())!.comics.single;

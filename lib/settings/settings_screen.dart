@@ -108,6 +108,12 @@ class SettingsScreen extends ConsumerWidget {
                         ).surfaceContainerHigh,
                         selected: theme.background == b,
                         outlined: true,
+                        // The backgrounds differ little: say which is which.
+                        ring:
+                            b.seed ??
+                            (b == AppBackground.accent
+                                ? Theme.of(context).colorScheme.primary
+                                : null),
                         onTap: () => notifier.setBackground(b),
                       ),
                   ],
@@ -201,7 +207,11 @@ class _Swatch extends StatelessWidget {
     required this.onTap,
     this.icon,
     this.outlined = false,
+    this.ring,
   });
+
+  /// The ring's colour when not selected, for swatches that look alike.
+  final Color? ring;
 
   final String label;
   final Color color;
@@ -237,10 +247,11 @@ class _Swatch extends StatelessWidget {
                     border: Border.all(
                       color: selected
                           ? scheme.onSurface
-                          : outlined
-                          ? scheme.outlineVariant
-                          : Colors.transparent,
-                      width: selected || !outlined ? 3 : 1,
+                          : ring ??
+                                (outlined
+                                    ? scheme.outlineVariant
+                                    : Colors.transparent),
+                      width: selected || !outlined || ring != null ? 3 : 1,
                     ),
                   ),
                   child: selected

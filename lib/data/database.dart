@@ -513,6 +513,17 @@ class AppDatabase extends _$AppDatabase {
   Future<void> putEntry(LibraryEntriesCompanion entry) =>
       into(libraryEntries).insertOnConflictUpdate(entry);
 
+  /// The comic at [from] is now at [to] (the same file, a new address).
+  Future<void> relocate(String from, String to) => transaction(() async {
+    await deleteEntries([to]);
+    await (update(libraryEntries)..where((e) => e.location.equals(from))).write(
+      LibraryEntriesCompanion(location: Value(to)),
+    );
+    await (update(books)..where((b) => b.path.equals(from))).write(
+      BooksCompanion(path: Value(to)),
+    );
+  });
+
   Future<void> updateEntry(String location, LibraryEntriesCompanion data) =>
       (update(
         libraryEntries,

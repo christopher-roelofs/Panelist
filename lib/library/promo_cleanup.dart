@@ -13,6 +13,7 @@ import '../core/sources/open_source.dart';
 import '../core/sources/page_source.dart';
 import '../core/util/file_errors.dart';
 import '../data/database.dart';
+import '../platform/comic_files.dart';
 import 'comic_info_editor.dart';
 import 'convert_comics.dart';
 import 'library_model.dart';
@@ -100,7 +101,7 @@ Future<CleanResult> removePromos(
         path = p.setExtension(path, '.cbz');
       }
       final ids = await removePagesFromCbz(path, f.pages.toSet());
-      await db.moveBook(ids.oldId, ids.newId, path);
+      await db.moveBook(ids.oldId, ids.newId, ComicFiles.now(path));
       cleaned++;
       pages += f.pages.length;
     } on Object catch (e) {

@@ -11,6 +11,7 @@ import '../app/providers.dart';
 import '../core/sources/open_source.dart';
 import '../data/book_extensions.dart';
 import '../data/database.dart';
+import '../library/library_model.dart';
 import '../library/library_providers.dart';
 import '../library/library_refresh.dart';
 import '../library/library_scanner.dart';
@@ -59,14 +60,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (!exists) {
       // In a library folder that's gone as a whole (a network drive not
       // connected, a card not inserted): the comic is likely fine.
-      final away = (await ref.read(databaseProvider).roots())
-          .where(
-            (r) =>
-                !AndroidDocuments.isContentUri(r.location) &&
-                p.isWithin(r.location, book.path) &&
-                !Directory(r.location).existsSync(),
-          )
-          .firstOrNull;
+      LibraryRoot? away;
+      for (final r in await ref.read(databaseProvider).roots()) {
+        // Not existsSync: a drive that's away can take long to say so.
+        if (!AndroidDocuments.isContentUri(r.location) &&
+            p.isWithin(r.location, book.path) &&
+            !await Directory(r.location).exists()) {
+          away = r;
+          break;
+        }
+      }
       if (!mounted) return;
       if (away != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -233,6 +236,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   SliverToBoxAdapter(
                     child: _ContinueReading(
                       books: unfinished,
+                      inLibrary: {
+                        for (final c in ref.watch(libraryComicsProvider))
+                          ?c.entry.bookId: c,
+                      },
                       onOpen: _openRecent,
                       onRemove: _forget,
                       onMarkRead: (b) => unawaited(
@@ -259,6 +266,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 class _ContinueReading extends StatelessWidget {
   const _ContinueReading({
     required this.books,
+    required this.inLibrary,
     required this.onOpen,
     required this.onRemove,
     required this.onMarkRead,
@@ -269,8 +277,14 @@ class _ContinueReading extends StatelessWidget {
   final ValueChanged<Book> onRemove;
   final ValueChanged<Book> onMarkRead;
 
+  /// The library's comics by book ID: their covers and names fill in for
+  /// books that have none of their own.
+  final Map<String, LibraryComic> inLibrary;
+
   @override
   Widget build(BuildContext context) {
+    // A phone: smaller, so the library still starts on the first screen.
+    final small = MediaQuery.sizeOf(context).shortestSide < 500;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -282,16 +296,17 @@ class _ContinueReading extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 250,
+          height: small ? 196 : 250,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: books.length,
             separatorBuilder: (_, _) => const SizedBox(width: 14),
             itemBuilder: (context, i) => SizedBox(
-              width: 124,
+              width: small ? 92 : 124,
               child: _BookTile(
                 book: books[i],
+                inLibrary: inLibrary[books[i].id],
                 onOpen: () => onOpen(books[i]),
                 onRemove: () => onRemove(books[i]),
                 onMarkRead: () => onMarkRead(books[i]),
@@ -307,15 +322,25 @@ class _ContinueReading extends StatelessWidget {
 class _BookTile extends StatelessWidget {
   const _BookTile({
     required this.book,
+    this.inLibrary,
     required this.onOpen,
     required this.onRemove,
     required this.onMarkRead,
   });
 
   final Book book;
+  final LibraryComic? inLibrary;
   final VoidCallback onOpen;
   final VoidCallback onRemove;
   final VoidCallback onMarkRead;
+
+  /// As the library names it ("Saga #3 (2012)") when it's there, so the
+  /// row reads alike whether or not a comic has its own details.
+  String get _title {
+    final c = inLibrary;
+    if (c == null || c.number == null) return book.displayTitle;
+    return '${c.series} ${c.issueLabel}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -338,7 +363,9 @@ class _BookTile extends StatelessWidget {
               child: ColoredBox(
                 color: theme.colorScheme.surfaceContainerHighest,
                 child: cover == null
-                    ? const Icon(Icons.menu_book, size: 40)
+                    ? (inLibrary == null
+                          ? const Icon(Icons.menu_book, size: 40)
+                          : LibraryCover(comic: inLibrary))
                     : Image.memory(
                         cover,
                         fit: BoxFit.cover,
@@ -351,7 +378,7 @@ class _BookTile extends StatelessWidget {
           LinearProgressIndicator(value: progress, minHeight: 3),
           const SizedBox(height: 6),
           Text(
-            book.displayTitle,
+            _title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyMedium,
