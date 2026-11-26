@@ -93,9 +93,78 @@ abstract final class AndroidDocuments {
     );
   }
 
+  /// A private copy of [uri] to read for an edit (deleted on release).
+  static Future<OpenedDocument> copy(String uri) async {
+    final String path;
+    try {
+      path = (await _channel.invokeMethod<String>('copy', uri))!;
+    } on PlatformException catch (e) {
+      throw FileSystemException(e.message ?? 'Could not read document', uri);
+    }
+    return OpenedDocument(
+      path,
+      null,
+      () => _channel.invokeMethod<void>('deleteCopy', path),
+    );
+  }
+
   /// Whether [uri] can still be opened (not deleted, permission intact).
   static Future<bool> exists(String uri) async =>
       await _channel.invokeMethod<bool>('exists', uri) ?? false;
+
+  /// Whether Panelist may change files in the library folder [treeUri]
+  /// (folders added before editing came only allowed reading).
+  static Future<bool> canWrite(String treeUri) async =>
+      await _channel.invokeMethod<bool>('canWrite', treeUri) ?? false;
+
+  // Edits in a library folder: [tree] is its URI, paths are `/`-separated
+  // inside it. Failures are FileSystemExceptions.
+
+  static Future<T?> _edit<T>(String method, Map<String, String> args) async {
+    try {
+      return await _channel.invokeMethod<T>(method, args);
+    } on PlatformException catch (e) {
+      throw FileSystemException(
+        e.message ?? 'Couldn’t change the file',
+        args['path'] ?? args['from'],
+      );
+    }
+  }
+
+  /// Whether something is at [path].
+  static Future<bool> existsAt(String tree, String path) async =>
+      await _edit<bool>('docExists', {'tree': tree, 'path': path}) ?? false;
+
+  /// Replaces the file at [path] with the local [file]'s bytes, safely (the
+  /// original stays if anything fails). Returns its URI.
+  static Future<String> replace(String tree, String path, String file) async =>
+      (await _edit<String>('docReplace', {
+        'tree': tree,
+        'path': path,
+        'file': file,
+      }))!;
+
+  /// A new file at [path] (folders created) with the local [file]'s bytes;
+  /// fails if one is there. Returns its URI.
+  static Future<String> create(String tree, String path, String file) async =>
+      (await _edit<String>('docCreate', {
+        'tree': tree,
+        'path': path,
+        'file': file,
+      }))!;
+
+  /// Moves or renames [from] to [to] (folders created); never overwrites.
+  /// Returns its new URI.
+  static Future<String> move(String tree, String from, String to) async =>
+      (await _edit<String>('docMove', {'tree': tree, 'from': from, 'to': to}))!;
+
+  static Future<void> delete(String tree, String path) =>
+      _edit<void>('docDelete', {'tree': tree, 'path': path});
+
+  /// Deletes the folder at [path] if it's empty; whether it did.
+  static Future<bool> removeEmptyFolder(String tree, String path) async =>
+      await _edit<bool>('docRemoveEmptyFolder', {'tree': tree, 'path': path}) ??
+      false;
 
   /// Gives up the persisted permission for [uri] (e.g. removed from recents).
   static Future<void> release(String uri) async {

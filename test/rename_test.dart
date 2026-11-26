@@ -12,6 +12,8 @@ import 'package:panelist/library/rename_template.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
+  androidPlans();
+
   group('renderTemplate', () {
     final saga = {
       'series': 'Saga',
@@ -336,5 +338,55 @@ void main() {
         'Image Comics/Saga/Saga 001 (2012)',
       );
     });
+  });
+}
+
+LibraryComic _doc(
+  String folder,
+  String name, {
+  String? series,
+  String? number,
+  int? year,
+}) => LibraryComic(
+  LibraryEntry(
+    location:
+        'content://x/tree/t/document/${Uri.encodeComponent('$folder/$name')}',
+    rootId: 1,
+    folder: folder,
+    fileName: name,
+    size: 1,
+    modified: 0,
+    series: series,
+    number: number,
+    year: year,
+  ),
+  null,
+);
+
+void androidPlans() {
+  test('Android documents are planned by their path in the library', () {
+    const root = 'content://x/tree/t';
+    final roots = {1: root};
+    final a = _doc('in', 'saga1.cbz', series: 'Saga', number: '1', year: 2012);
+    final b = _doc(
+      'Saga (2012)',
+      'Saga 002 (2012).cbz',
+      series: 'Saga',
+      number: '2',
+      year: 2012,
+    );
+    final c = _doc('in', 'x.cbz', series: 'Saga', number: '2', year: 2012);
+    final plans = planInLibrary(
+      [a, b, c],
+      '{series} ({year})/{series} {number:3} ({year})',
+      roots,
+      [a, b, c],
+    );
+    expect(comicPath(a, roots), '$root/in/saga1.cbz');
+    expect(plans[0].target, '$root/Saga (2012)/Saga 001 (2012).cbz');
+    expect(plans[0].state, RenameState.rename);
+    expect(plans[1].state, RenameState.same);
+    // Saga 2 is already there (another library comic).
+    expect(plans[2].state, RenameState.exists);
   });
 }

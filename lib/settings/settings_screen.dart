@@ -129,7 +129,7 @@ class SettingsScreen extends ConsumerWidget {
           if (canEditMetadata) ...[
             heading('Comic details'),
             const LookupSettings(),
-            const ConvertedOriginalsTile(),
+            if (canMoveFiles) const ConvertedOriginalsTile(),
             ListTile(
               leading: const Icon(Icons.business_outlined),
               title: const Text('Publisher names'),

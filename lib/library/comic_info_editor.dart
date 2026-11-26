@@ -14,24 +14,33 @@ import '../core/sources/open_source.dart';
 import '../core/util/file_errors.dart';
 import '../data/book_extensions.dart';
 import '../platform/android_documents.dart';
+import '../platform/comic_files.dart';
 import 'info_lookup.dart';
 import 'library_model.dart';
 import 'library_scanner.dart';
 import 'library_view.dart' show LibraryCover;
 import 'rename_comics.dart';
 
-/// Whether this platform edits metadata (desktop: the library lives there,
-/// and batch tagging is desk work).
+/// Whether this platform edits comics' details (on Android, in library
+/// folders, through the Storage Access Framework).
 bool get canEditMetadata =>
+    Platform.isLinux ||
+    Platform.isWindows ||
+    Platform.isMacOS ||
+    Platform.isAndroid;
+
+/// Whether this platform converts comics to CBZ (Android: not yet).
+bool get canMoveFiles =>
     Platform.isLinux || Platform.isWindows || Platform.isMacOS;
 
 /// Whether [location] is a file whose ComicInfo Panelist can save: a ZIP
 /// (CBZ, or a ZIP misnamed .cbr). Other formats come later.
 bool isEditableComic(String location) {
-  if (!canEditMetadata ||
-      AndroidDocuments.isContentUri(location) ||
-      isRemoteLocation(location)) {
-    return false;
+  if (!canEditMetadata || isRemoteLocation(location)) return false;
+  // A library document: by its name (opening it to look would be slow
+  // here); a ZIP misnamed .cbr isn't offered.
+  if (AndroidDocuments.isContentUri(location)) {
+    return ComicFiles.nameOf(location).toLowerCase().endsWith('.cbz');
   }
   try {
     final magic = readMagic(location, 4);

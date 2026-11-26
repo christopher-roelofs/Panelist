@@ -18,6 +18,7 @@ import 'library/info_lookup.dart';
 import 'library/library_providers.dart';
 import 'library/library_scanner.dart';
 import 'platform/android_documents.dart';
+import 'platform/comic_files.dart';
 import 'reader/open_book.dart';
 import 'share/remote_library.dart';
 import 'share/share_settings.dart';
@@ -32,6 +33,14 @@ Future<void> main(List<String> args) async {
   );
   unawaited(ArchivePageSource.cleanStaleCache());
   final db = AppDatabase();
+  // Android: edits to library comics go through their library folder.
+  ComicFiles.workDir = Directory(
+    p.join((await getApplicationCacheDirectory()).path, 'saving'),
+  );
+  ComicFiles.placeOf = (location) async {
+    final place = await db.placeInLibrary(location);
+    return place == null ? null : (tree: place.root, path: place.path);
+  };
   final defaults = await ReaderDefaultsNotifier.load(db);
   final libraryPrefs = await LibraryPrefsNotifier.load(db);
   final appTheme = await AppThemeNotifier.load(db);

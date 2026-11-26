@@ -37,9 +37,44 @@ const organizeLayouts = [
 
 /// Whether [comic]'s file can be renamed here.
 bool canRenameComic(LibraryComic comic) =>
-    canEditMetadata &&
-    !AndroidDocuments.isContentUri(comic.location) &&
-    !isRemoteLocation(comic.location);
+    canEditMetadata && !isRemoteLocation(comic.location);
+
+/// Where [comic] is, as a path to plan with: its location, or for an
+/// Android library document (whose URI has no path in it), its library
+/// folder's location, `/`, its folders and name.
+String comicPath(LibraryComic comic, Map<int, String> roots) {
+  if (!AndroidDocuments.isContentUri(comic.location)) return comic.location;
+  final root = roots[comic.entry.rootId];
+  if (root == null) return comic.location;
+  return [
+    root,
+    if (comic.entry.folder.isNotEmpty) comic.entry.folder,
+    comic.entry.fileName,
+  ].join('/');
+}
+
+/// [planRenames] for comics in [roots] (by id), checking names against the
+/// [library] where the files can't be looked at directly (Android).
+List<RenamePlan> planInLibrary(
+  List<LibraryComic> comics,
+  String template,
+  Map<int, String> roots,
+  List<LibraryComic> library,
+) {
+  final documents = comics.any(
+    (c) => AndroidDocuments.isContentUri(c.location),
+  );
+  final known = documents
+      ? {for (final c in library) comicPath(c, roots).toLowerCase()}
+      : null;
+  return planRenames(
+    comics,
+    template,
+    (c) => roots[c.entry.rootId],
+    pathOf: (c) => comicPath(c, roots),
+    exists: known == null ? null : (path) => known.contains(path.toLowerCase()),
+  );
+}
 
 /// The values a template is filled from: ComicInfo first, then what the
 /// file and folder names say.
@@ -89,6 +124,9 @@ List<RenamePlan> planRenames(
   String? Function(LibraryComic) rootOf, {
   bool Function(String path)? exists,
 
+  /// Where a comic is now ([comicPath]); its location by default.
+  String Function(LibraryComic)? pathOf,
+
   /// Longer paths are skipped ([RenameState.tooLong]); on Windows, 259.
   int? maxPath,
 }) {
@@ -100,21 +138,22 @@ List<RenamePlan> planRenames(
   final organise = template.contains('/');
   final plans = <RenamePlan>[];
   for (final c in comics) {
+    final from = pathOf?.call(c) ?? c.location;
     final rendered = renderTemplate(template, templateValues(c));
-    final base = organise ? rootOf(c) : p.dirname(c.location);
+    final base = organise ? rootOf(c) : p.dirname(from);
     if (rendered == null || base == null) {
       plans.add((comic: c, target: null, state: RenameState.noName));
       continue;
     }
     final target =
         p.joinAll([base, ...rendered.split('/')]) +
-        p.extension(c.location).toLowerCase();
-    final state = target == c.location
+        p.extension(from).toLowerCase();
+    final state = target == from
         ? RenameState.same
         : longest != null && target.length > longest
         ? RenameState.tooLong
         // Only the letters' case changes: the "existing" file is this one.
-        : there(target) && target.toLowerCase() != c.location.toLowerCase()
+        : there(target) && target.toLowerCase() != from.toLowerCase()
         ? RenameState.exists
         : RenameState.rename;
     plans.add((comic: c, target: target, state: state));
@@ -144,16 +183,46 @@ Future<RenameResult> renameComics(
   AppDatabase db,
   List<RenamePlan> plans, {
   Set<String> roots = const {},
+
+  /// Library folders by id, for Android documents (moved by their path
+  /// inside one).
+  Map<int, String> rootsById = const {},
   void Function(int done)? onProgress,
   bool Function()? shouldStop,
 }) async {
   var renamed = 0, failed = 0;
   final errors = <String>[];
   final left = <String>{};
+  final leftDocuments = <(String, String)>{};
   final moving = plans.where((r) => r.state == RenameState.rename).toList();
   for (final (i, r) in moving.indexed) {
     if (shouldStop?.call() ?? false) break;
     final from = r.comic.location, to = r.target!;
+    if (AndroidDocuments.isContentUri(from)) {
+      try {
+        final tree = rootsById[r.comic.entry.rootId];
+        if (tree == null || !to.startsWith('$tree/')) {
+          throw FileSystemException('Not in its library folder', to);
+        }
+        final folder = r.comic.entry.folder;
+        final uri = await AndroidDocuments.move(
+          tree,
+          [if (folder.isNotEmpty) folder, r.comic.entry.fileName].join('/'),
+          to.substring(tree.length + 1),
+        );
+        if (r.comic.entry.bookId case final id?) {
+          await db.moveBook(id, id, uri);
+        }
+        if (folder.isNotEmpty) leftDocuments.add((tree, folder));
+        renamed++;
+      } on Object catch (e) {
+        failed++;
+        errors.add('${r.comic.entry.fileName}: ${describeFileError(e)}');
+      } finally {
+        onProgress?.call(i + 1);
+      }
+      continue;
+    }
     try {
       await Directory(p.dirname(to)).create(recursive: true);
       // Re-check just before: never overwrite.
@@ -175,6 +244,20 @@ Future<RenameResult> renameComics(
   // Deepest first, so a parent emptied by its child goes too.
   for (final dir in left.toList()..sort((a, b) => b.length - a.length)) {
     await _removeEmpty(dir, roots);
+  }
+  for (final (tree, folder)
+      in leftDocuments.toList()..sort((a, b) => b.$2.length - a.$2.length)) {
+    // The folder, then its parents, while they're empty (never the library
+    // folder itself).
+    var f = folder;
+    try {
+      while (f.isNotEmpty &&
+          await AndroidDocuments.removeEmptyFolder(tree, f)) {
+        f = f.contains('/') ? f.substring(0, f.lastIndexOf('/')) : '';
+      }
+    } on FileSystemException {
+      // Best effort.
+    }
   }
   return (renamed: renamed, failed: failed, errors: errors);
 }
@@ -268,15 +351,17 @@ Future<String> keepOrganized(
   final roots = {
     for (final r in await ref.read(databaseProvider).roots()) r.id: r.location,
   };
-  final plans = planRenames(
+  final plans = planInLibrary(
     [withDetails(comic, doc, aliases: aliases)],
     await _savedTemplate(ref),
-    (c) => roots[c.entry.rootId],
+    roots,
+    ref.read(libraryComicsProvider),
   );
   final r = await renameComics(
     ref.read(databaseProvider),
     plans,
     roots: roots.values.toSet(),
+    rootsById: roots,
   );
   return r.renamed == 1 ? plans.single.target! : comic.location;
 }
@@ -335,14 +420,12 @@ class _RenameDialogState extends ConsumerState<_RenameDialog> {
       r.id: r.location,
   };
 
-  List<RenamePlan> _plan() {
-    final roots = _roots;
-    return planRenames(
-      widget.comics,
-      _template.text.trim(),
-      (c) => roots[c.entry.rootId],
-    );
-  }
+  List<RenamePlan> _plan() => planInLibrary(
+    widget.comics,
+    _template.text.trim(),
+    _roots,
+    ref.read(libraryComicsProvider),
+  );
 
   Future<void> _rename(List<RenamePlan> plans) async {
     setState(() => _done = 0);
@@ -352,6 +435,7 @@ class _RenameDialogState extends ConsumerState<_RenameDialog> {
       db,
       plans,
       roots: _roots.values.toSet(),
+      rootsById: _roots,
       onProgress: (n) {
         if (mounted) setState(() => _done = n);
       },
@@ -556,7 +640,7 @@ class _RenameDialogState extends ConsumerState<_RenameDialog> {
                         [
                           switch (r.state) {
                             RenameState.rename =>
-                              'from ${shown(r.comic, r.comic.location)}',
+                              'from ${shown(r.comic, comicPath(r.comic, roots))}',
                             RenameState.same => 'already in place',
                             RenameState.clash =>
                               'another comic would get this name',

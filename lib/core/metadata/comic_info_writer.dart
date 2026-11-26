@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive.dart';
-import 'package:path/path.dart' as p;
 
+import '../../platform/comic_files.dart';
 import '../sources/cbz_page_source.dart';
 import 'comic_info.dart';
 
@@ -16,19 +16,23 @@ class ComicInfoWriteException implements Exception {
   String toString() => message;
 }
 
-/// Writes [xml] as the ComicInfo.xml inside the CBZ at [path].
+/// Writes [xml] as the ComicInfo.xml inside the CBZ at [location] (a path,
+/// or an Android library document).
 ///
 /// Pages and other entries are copied as they are (no recompression). The
-/// new archive is written next to the original, checked (it opens, and has
-/// the same pages and the new ComicInfo), and only then replaces it; if
-/// anything fails the original is untouched. Runs in a worker isolate.
-Future<void> writeComicInfoToCbz(String path, String xml) =>
-    Isolate.run(() => _write(path, xml));
-
-void _write(String path, String xml) {
-  final temp = File(
-    p.join(p.dirname(path), '.${p.basename(path)}.panelist-saving'),
+/// new archive is written apart, checked (it opens, and has the same pages
+/// and the new ComicInfo), and only then replaces the original; if anything
+/// fails the original is untouched. Runs in a worker isolate.
+Future<void> writeComicInfoToCbz(String location, String xml) {
+  final name = ComicFiles.nameOf(location);
+  return ComicFiles.rewrite(
+    location,
+    (source, target) => Isolate.run(() => _write(source, target, name, xml)),
   );
+}
+
+void _write(String path, String target, String name, String xml) {
+  final temp = File(target);
   final input = InputFileStream(path);
   try {
     final Archive original;
@@ -36,9 +40,7 @@ void _write(String path, String xml) {
     try {
       original = decoder.decodeStream(input);
     } on Object {
-      throw ComicInfoWriteException(
-        'Not a CBZ (ZIP) file: ${p.basename(path)}',
-      );
+      throw ComicInfoWriteException('Not a CBZ (ZIP) file: $name');
     }
     final pagesBefore = cbzPagesFingerprint(cbzPages(original));
 
@@ -75,12 +77,11 @@ void _write(String path, String xml) {
 
     _verify(temp.path, pagesBefore, infoName, xml);
     input.closeSync();
-    temp.renameSync(path);
   } catch (e) {
     input.closeSync();
     if (temp.existsSync()) temp.deleteSync();
     if (e is ComicInfoWriteException) rethrow;
-    throw ComicInfoWriteException('Couldn’t save ${p.basename(path)}: $e');
+    throw ComicInfoWriteException('Couldn’t save $name: $e');
   }
 }
 

@@ -488,6 +488,25 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<LibraryEntry>> watchEntries() => select(libraryEntries).watch();
 
+  Future<LibraryEntry?> entryAt(String location) => (select(
+    libraryEntries,
+  )..where((e) => e.location.equals(location))).getSingleOrNull();
+
+  /// Where the library comic at [location] is: its library folder's
+  /// location and its `/`-separated path inside; null if it isn't one.
+  Future<({String root, String path})?> placeInLibrary(String location) async {
+    final e = await entryAt(location);
+    if (e == null) return null;
+    final root = await (select(
+      libraryRoots,
+    )..where((r) => r.id.equals(e.rootId))).getSingleOrNull();
+    if (root == null) return null;
+    return (
+      root: root.location,
+      path: [if (e.folder.isNotEmpty) e.folder, e.fileName].join('/'),
+    );
+  }
+
   Future<List<LibraryEntry>> entriesOf(int rootId) =>
       (select(libraryEntries)..where((e) => e.rootId.equals(rootId))).get();
 

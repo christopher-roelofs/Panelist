@@ -337,6 +337,15 @@ newer).
   go into the device's library folder (today they're in app storage,
   `downloads/<book ID>/`, and vanish with the app's data). Downloading
   into the library folder on desktops comes with it.
+  Status (2026-11-26): done on Android: write access to library folders
+  (Settings → Library folder → Allow editing for folders added before),
+  saving details (editor, lookup, bulk edit) and promo-page removal
+  through `ComicFiles.rewrite` (a private copy is edited, then put back:
+  new file under a hidden name, original set aside, swap, delete), rename,
+  organize and Keep organized (`AndroidDocuments.move`, planned by the
+  comic's path inside its library folder, `comicPath`). Still to do:
+  Convert to CBZ (and lookup of CBR files), downloads into the library
+  folder on Android. Desktop downloads already go there.
 - Windows build (2026-11-26): `windows/` added; `.github/workflows/
   windows.yml` builds on windows-latest, adds libarchive from vcpkg
   (`archive.dll` + zlib, bzip2, xz, zstd, lz4 DLLs) and the MSVC runtime,

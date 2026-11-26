@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -352,6 +353,17 @@ class _KeyDialogState extends State<_KeyDialog> {
     super.dispose();
   }
 
+  /// Replaces the box's text with the clipboard's (copied from the
+  /// service's site), trimmed.
+  Future<void> _paste() async {
+    final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim();
+    if (text == null || text.isEmpty || !mounted) return;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.service;
@@ -364,7 +376,7 @@ class _KeyDialogState extends State<_KeyDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${s.help} It’s kept on this computer and only sent to '
+              '${s.help} It’s kept on this device and only sent to '
               '${s.name}. Leave it empty to stop using ${s.name}.',
             ),
             const SizedBox(height: 16),
@@ -375,10 +387,22 @@ class _KeyDialogState extends State<_KeyDialog> {
               decoration: InputDecoration(
                 labelText: s.keyName,
                 border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  tooltip: _show ? 'Hide' : 'Show',
-                  icon: Icon(_show ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _show = !_show),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Paste',
+                      icon: const Icon(Icons.content_paste),
+                      onPressed: _paste,
+                    ),
+                    IconButton(
+                      tooltip: _show ? 'Hide' : 'Show',
+                      icon: Icon(
+                        _show ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () => setState(() => _show = !_show),
+                    ),
+                  ],
                 ),
               ),
               onSubmitted: (v) => Navigator.of(context).pop(v),
@@ -565,12 +589,39 @@ class _TagDialogState extends ConsumerState<_TagDialog> {
   }
 }
 
-class _TagReport extends StatelessWidget {
+class _TagReport extends StatefulWidget {
   const _TagReport({required this.result, required this.parent});
   final TagResult result;
 
-  /// For opening the editor after this dialog closes.
+  /// For opening the editor over this dialog.
   final BuildContext parent;
+
+  @override
+  State<_TagReport> createState() => _TagReportState();
+}
+
+class _TagReportState extends State<_TagReport> {
+  /// What's still to choose, and how many were tagged so far (chosen ones
+  /// count once saved).
+  late var result = widget.result;
+
+  Future<void> _choose(Unmatched u) async {
+    final saved = await editComicInfo(widget.parent, u.comic, lookUp: true);
+    if (!saved || !mounted) return;
+    setState(() {
+      result = (
+        tagged: result.tagged + 1,
+        failed: result.failed,
+        skipped: result.skipped,
+        unmatched: [...result.unmatched]..remove(u),
+        errors: result.errors,
+      );
+    });
+    // Nothing left to see: done.
+    if (result.unmatched.isEmpty && result.errors.isEmpty) {
+      Navigator.of(context).pop();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -596,8 +647,7 @@ class _TagReport extends StatelessWidget {
                 title: Text(u.comic.entry.fileName),
                 subtitle: Text(u.reason),
                 trailing: TextButton(
-                  onPressed: () =>
-                      unawaited(editComicInfo(parent, u.comic, lookUp: true)),
+                  onPressed: () => unawaited(_choose(u)),
                   child: const Text('Choose…'),
                 ),
               ),

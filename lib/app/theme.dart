@@ -29,12 +29,12 @@ enum AppAccent {
   final Color? seed;
 }
 
-/// Background colours: [grey] is neutral, [accent] a tint of the accent
-/// colour, the rest a fixed tint whatever the accent. Black mode stays
-/// black.
+/// Background colours: [accent] a tint of the accent colour, [grey]
+/// neutral (the default), the rest a fixed tint whatever the accent. Black
+/// mode stays black.
 enum AppBackground {
-  grey('Grey', null),
   accent('Accent', null),
+  grey('Grey', null),
   warm('Warm', Color(0xFFC08040)),
   cool('Cool', Color(0xFF4070C0)),
   green('Green', Color(0xFF4C8C5A)),

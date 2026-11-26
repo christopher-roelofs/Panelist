@@ -20,7 +20,7 @@ const _convertibleExtensions = {'.cbr', '.cb7', '.cbt', '.rar', '.7z', '.tar'};
 /// Whether [comic] can be converted to CBZ here (judged by its name, so it's
 /// cheap for a whole publisher; [convertComics] checks the contents).
 bool isConvertibleComic(LibraryComic comic) =>
-    canEditMetadata &&
+    canMoveFiles &&
     !AndroidDocuments.isContentUri(comic.location) &&
     !isRemoteLocation(comic.location) &&
     _convertibleExtensions.contains(

@@ -6,6 +6,7 @@ import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:xml/xml.dart';
 
+import '../../platform/comic_files.dart';
 import '../sources/cbz_page_source.dart';
 import 'comic_info.dart';
 
@@ -55,22 +56,33 @@ class PageRemovalException implements Exception {
   String toString() => message;
 }
 
-/// Removes the page entries named [remove] from the CBZ at [path] and
-/// returns its new book ID (`file:` plus the pages' fingerprint).
+/// Removes the page entries named [remove] from the CBZ at [location] (a
+/// path, or an Android library document) and returns its new book ID
+/// (`file:` plus the pages' fingerprint).
 ///
 /// Everything else is copied as it is. ComicInfo's PageCount and `<Pages>`
-/// are updated to match. The new archive is written next to the original,
-/// checked (its pages are exactly the old ones minus [remove], in order),
-/// and only then replaces it. Runs in a worker isolate.
+/// are updated to match. The new archive is written apart, checked (its
+/// pages are exactly the old ones minus [remove], in order), and only then
+/// replaces the original. Runs in a worker isolate.
 Future<({String oldId, String newId})> removePagesFromCbz(
-  String path,
+  String location,
   Set<String> remove,
-) => Isolate.run(() => _remove(path, remove));
-
-({String oldId, String newId}) _remove(String path, Set<String> remove) {
-  final temp = File(
-    p.join(p.dirname(path), '.${p.basename(path)}.panelist-saving'),
+) {
+  final name = ComicFiles.nameOf(location);
+  return ComicFiles.rewrite(
+    location,
+    (source, target) =>
+        Isolate.run(() => _remove(source, target, name, remove)),
   );
+}
+
+({String oldId, String newId}) _remove(
+  String path,
+  String target,
+  String name,
+  Set<String> remove,
+) {
+  final temp = File(target);
   final input = InputFileStream(path);
   try {
     final Archive original;
@@ -78,7 +90,7 @@ Future<({String oldId, String newId})> removePagesFromCbz(
     try {
       original = decoder.decodeStream(input);
     } on Object {
-      throw PageRemovalException('Not a CBZ (ZIP) file: ${p.basename(path)}');
+      throw PageRemovalException('Not a CBZ (ZIP) file: $name');
     }
     final pages = cbzPages(original);
     final pageNames = [for (final f in pages) f.name];
@@ -136,13 +148,12 @@ Future<({String oldId, String newId})> removePagesFromCbz(
       check.closeSync();
     }
     input.closeSync();
-    temp.renameSync(path);
     return (oldId: oldId, newId: newId);
   } catch (e) {
     input.closeSync();
     if (temp.existsSync()) temp.deleteSync();
     if (e is PageRemovalException) rethrow;
-    throw PageRemovalException('Couldn’t save ${p.basename(path)}: $e');
+    throw PageRemovalException('Couldn’t save $name: $e');
   }
 }
 

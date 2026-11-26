@@ -68,6 +68,7 @@ class MainActivity : FlutterActivity() {
             "pickTree" -> pickTree(result)
             "listTree" -> background(result) { listTree(Uri.parse(call.arguments as String)) }
             "open" -> background(result) { open(Uri.parse(call.arguments as String)) }
+            "copy" -> background(result) { copy(Uri.parse(call.arguments as String)) }
             "closeFd" -> background(result) {
                 ParcelFileDescriptor.adoptFd(call.arguments as Int).close()
                 null
@@ -80,6 +81,26 @@ class MainActivity : FlutterActivity() {
             "release" -> background(result) {
                 releasePermission(Uri.parse(call.arguments as String))
                 null
+            }
+            "canWrite" -> background(result) { canWrite(Uri.parse(call.arguments as String)) }
+            "docExists" -> background(result) {
+                resolve(treeArg(call), call.argument<String>("path")!!) != null
+            }
+            "docReplace" -> background(result) {
+                replace(treeArg(call), call.argument<String>("path")!!, File(call.argument<String>("file")!!))
+            }
+            "docCreate" -> background(result) {
+                create(treeArg(call), call.argument<String>("path")!!, File(call.argument<String>("file")!!))
+            }
+            "docMove" -> background(result) {
+                move(treeArg(call), call.argument<String>("from")!!, call.argument<String>("to")!!)
+            }
+            "docDelete" -> background(result) {
+                delete(treeArg(call), call.argument<String>("path")!!)
+                null
+            }
+            "docRemoveEmptyFolder" -> background(result) {
+                removeEmptyFolder(treeArg(call), call.argument<String>("path")!!)
             }
             else -> result.notImplemented()
         }
@@ -111,8 +132,11 @@ class MainActivity : FlutterActivity() {
         }
         pendingTree = result
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            // Write too: details are saved into the comics, and comics are
+            // renamed, moved and converted in place.
             addFlags(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
                     Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
             )
         }
@@ -128,7 +152,7 @@ class MainActivity : FlutterActivity() {
             result.success(null)
             return
         }
-        persist(tree)
+        persist(tree, write = true)
         io.execute {
             val root = DocumentsContract.buildDocumentUriUsingTree(
                 tree,
@@ -210,16 +234,22 @@ class MainActivity : FlutterActivity() {
         return uri.toString()
     }
 
-    /** Keeps read access across restarts, where the provider allows it. */
-    private fun persist(uri: Uri) {
-        try {
-            contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION,
-            )
-        } catch (_: SecurityException) {
-            // Not persistable (e.g. a one-off grant from a file manager):
-            // readable for now, but recents will need it picked again.
+    /**
+     * Keeps read access (and with [write], write access) across restarts,
+     * where the provider allows it.
+     */
+    private fun persist(uri: Uri, write: Boolean = false) {
+        val read = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        val both = read or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        for (flags in if (write) listOf(both, read) else listOf(read)) {
+            try {
+                contentResolver.takePersistableUriPermission(uri, flags)
+                return
+            } catch (_: SecurityException) {
+                // Not persistable (e.g. a one-off grant from a file manager):
+                // usable for now, but recents will need it picked again. Or
+                // no write access granted: try read alone.
+            }
         }
     }
 
@@ -231,6 +261,258 @@ class MainActivity : FlutterActivity() {
             )
         } catch (_: SecurityException) {
         }
+    }
+
+    // --- Editing documents in a library folder -------------------------
+    //
+    // Addressed by the folder's tree URI and a `/`-separated path inside it,
+    // so any provider works (document IDs are opaque).
+
+    private fun treeArg(call: MethodCall) = Uri.parse(call.argument<String>("tree")!!)
+
+    /** Whether Panelist may change files in the folder [tree]. */
+    private fun canWrite(tree: Uri): Boolean =
+        contentResolver.persistedUriPermissions.any {
+            it.uri == tree && it.isWritePermission
+        }
+
+    private fun docUri(tree: Uri, id: String) =
+        DocumentsContract.buildDocumentUriUsingTree(tree, id)
+
+    private fun split(path: String): Pair<String, String> {
+        val clean = path.trim('/')
+        return clean.substringBeforeLast('/', "") to clean.substringAfterLast('/')
+    }
+
+    /** [parentId]'s child named [name]: `(id, isFolder)`, or null. */
+    private fun child(tree: Uri, parentId: String, name: String): Pair<String, Boolean>? {
+        val columns = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+        )
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
+        var loose: Pair<String, Boolean>? = null
+        contentResolver.query(children, columns, null, null, null)?.use { c ->
+            while (c.moveToNext()) {
+                val found = c.getString(1) ?: continue
+                val entry = c.getString(0) to
+                    (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR)
+                if (found == name) return entry
+                // Most storage ignores case: "saga" is the same as "Saga".
+                if (found.equals(name, ignoreCase = true)) loose = entry
+            }
+        }
+        return loose
+    }
+
+    /** The document ID at [path] inside [tree], or null. */
+    private fun resolve(tree: Uri, path: String): String? {
+        var id = DocumentsContract.getTreeDocumentId(tree)
+        for (part in path.split('/').filter { it.isNotEmpty() }) {
+            id = child(tree, id, part)?.first ?: return null
+        }
+        return id
+    }
+
+    /** The folder at [path] inside [tree], created as needed. */
+    private fun ensureFolder(tree: Uri, path: String): String {
+        var id = DocumentsContract.getTreeDocumentId(tree)
+        for (part in path.split('/').filter { it.isNotEmpty() }) {
+            val existing = child(tree, id, part)
+            id = when {
+                existing == null -> DocumentsContract.getDocumentId(
+                    DocumentsContract.createDocument(
+                        contentResolver,
+                        docUri(tree, id),
+                        DocumentsContract.Document.MIME_TYPE_DIR,
+                        part,
+                    ) ?: throw IllegalStateException("Couldn’t create the folder $part"),
+                )
+                existing.second -> existing.first
+                else -> throw IllegalStateException("$part is a file, not a folder")
+            }
+        }
+        return id
+    }
+
+    private fun sizeOf(uri: Uri): Long? =
+        contentResolver.query(
+            uri,
+            arrayOf(DocumentsContract.Document.COLUMN_SIZE),
+            null,
+            null,
+            null,
+        )?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null }
+
+    /** A new document [name] in [parentId] holding [file]'s bytes, checked. */
+    private fun write(tree: Uri, parentId: String, name: String, file: File): Uri {
+        val uri = DocumentsContract.createDocument(
+            contentResolver,
+            docUri(tree, parentId),
+            "application/octet-stream",
+            name,
+        ) ?: throw IllegalStateException("Couldn’t create $name")
+        try {
+            if (displayName(uri) != name) {
+                throw IllegalStateException("The folder already has a file named $name")
+            }
+            contentResolver.openOutputStream(uri, "w")!!.use { out ->
+                file.inputStream().use { it.copyTo(out) }
+            }
+            val size = sizeOf(uri)
+            if (size != null && size != file.length()) {
+                throw IllegalStateException("Only part of $name was written")
+            }
+        } catch (e: Exception) {
+            DocumentsContract.deleteDocument(contentResolver, uri)
+            throw e
+        }
+        return uri
+    }
+
+    /**
+     * Replaces the document at [path] with [file]: written alongside under a
+     * hidden name and checked first, so a failure leaves the original as it
+     * was. Returns the document's URI (the same on local storage).
+     */
+    private fun replace(tree: Uri, path: String, file: File): String {
+        val (folder, name) = split(path)
+        val parentId = resolve(tree, folder)
+            ?: throw IllegalStateException("The folder of $name is gone")
+        val originalId = child(tree, parentId, name)?.first
+            ?: throw IllegalStateException("$name is gone")
+        val saving = ".$name.panelist-saving"
+        val old = ".$name.panelist-old"
+        for (leftover in listOf(saving, old)) {
+            child(tree, parentId, leftover)?.let {
+                DocumentsContract.deleteDocument(contentResolver, docUri(tree, it.first))
+            }
+        }
+        val fresh = write(tree, parentId, saving, file)
+        // Original aside, new one in, then the original goes. Each step can
+        // be undone if the next one fails.
+        val aside = try {
+            DocumentsContract.renameDocument(contentResolver, docUri(tree, originalId), old)
+                ?: docUri(tree, originalId)
+        } catch (e: Exception) {
+            DocumentsContract.deleteDocument(contentResolver, fresh)
+            throw e
+        }
+        val placed = try {
+            DocumentsContract.renameDocument(contentResolver, fresh, name) ?: fresh
+        } catch (e: Exception) {
+            DocumentsContract.renameDocument(contentResolver, aside, name)
+            DocumentsContract.deleteDocument(contentResolver, fresh)
+            throw e
+        }
+        DocumentsContract.deleteDocument(contentResolver, aside)
+        return placed.toString()
+    }
+
+    /** A new document at [path] (folders created) holding [file]'s bytes. */
+    private fun create(tree: Uri, path: String, file: File): String {
+        val (folder, name) = split(path)
+        val parentId = ensureFolder(tree, folder)
+        if (child(tree, parentId, name) != null) {
+            throw IllegalStateException("The folder already has a file named $name")
+        }
+        return write(tree, parentId, name, file).toString()
+    }
+
+    /**
+     * Moves the document at [from] to [to] (both paths inside [tree]),
+     * creating folders as needed. Nothing is overwritten. Returns its URI.
+     */
+    private fun move(tree: Uri, from: String, to: String): String {
+        val (fromFolder, fromName) = split(from)
+        val (toFolder, toName) = split(to)
+        val fromParent = resolve(tree, fromFolder)
+            ?: throw IllegalStateException("The folder of $fromName is gone")
+        val id = child(tree, fromParent, fromName)?.first
+            ?: throw IllegalStateException("$fromName is gone")
+        val toParent = ensureFolder(tree, toFolder)
+        val there = child(tree, toParent, toName)
+        // Only the case changes: the "existing" file is this one.
+        if (there != null && there.first != id) {
+            throw IllegalStateException("A file named $toName is already there")
+        }
+        var uri = docUri(tree, id)
+        if (toParent != fromParent) {
+            // A name free in both folders while it moves.
+            val moving = if (child(tree, toParent, fromName) == null) {
+                fromName
+            } else {
+                ".$fromName.panelist-moving"
+            }
+            if (moving != fromName) {
+                uri = DocumentsContract.renameDocument(contentResolver, uri, moving) ?: uri
+            }
+            uri = try {
+                DocumentsContract.moveDocument(
+                    contentResolver,
+                    uri,
+                    docUri(tree, fromParent),
+                    docUri(tree, toParent),
+                ) ?: throw UnsupportedOperationException()
+            } catch (_: UnsupportedOperationException) {
+                copyThenDelete(tree, uri, toParent, moving)
+            }
+        }
+        if (displayName(uri) != toName) {
+            uri = renameTo(uri, toName)
+        }
+        return uri.toString()
+    }
+
+    /** Renames [uri] to [name], also when only the case changes. */
+    private fun renameTo(uri: Uri, name: String): Uri {
+        val current = displayName(uri)
+        if (current != null && current.equals(name, ignoreCase = true)) {
+            val step = DocumentsContract.renameDocument(
+                contentResolver,
+                uri,
+                ".$name.panelist-renaming",
+            ) ?: uri
+            return DocumentsContract.renameDocument(contentResolver, step, name) ?: step
+        }
+        return DocumentsContract.renameDocument(contentResolver, uri, name) ?: uri
+    }
+
+    /** For providers that can't move: copy to [toParent], then delete. */
+    private fun copyThenDelete(tree: Uri, uri: Uri, toParent: String, name: String): Uri {
+        val copy = File.createTempFile("move", null, copiesDir())
+        try {
+            contentResolver.openInputStream(uri)!!.use { input ->
+                copy.outputStream().use { input.copyTo(it) }
+            }
+            val moved = write(tree, toParent, name, copy)
+            DocumentsContract.deleteDocument(contentResolver, uri)
+            return moved
+        } finally {
+            copy.delete()
+        }
+    }
+
+    private fun delete(tree: Uri, path: String) {
+        val id = resolve(tree, path) ?: return
+        DocumentsContract.deleteDocument(contentResolver, docUri(tree, id))
+    }
+
+    /** Deletes the folder at [path] if nothing is in it; whether it did. */
+    private fun removeEmptyFolder(tree: Uri, path: String): Boolean {
+        if (path.trim('/').isEmpty()) return false
+        val id = resolve(tree, path) ?: return false
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, id)
+        val empty = contentResolver.query(
+            children,
+            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID),
+            null,
+            null,
+            null,
+        )?.use { it.count == 0 } ?: false
+        if (empty) DocumentsContract.deleteDocument(contentResolver, docUri(tree, id))
+        return empty
     }
 
     /**
@@ -257,6 +539,23 @@ class MainActivity : FlutterActivity() {
             throw e
         }
         return mapOf("path" to copy.path, "name" to name)
+    }
+
+    /**
+     * A private copy of [uri] in the cache, for edits: reopening a library
+     * document through /proc/self/fd can be refused, a copy can't.
+     */
+    private fun copy(uri: Uri): String {
+        val copy = File.createTempFile("edit", null, copiesDir())
+        try {
+            contentResolver.openInputStream(uri)!!.use { input ->
+                copy.outputStream().use { input.copyTo(it) }
+            }
+        } catch (e: Exception) {
+            copy.delete()
+            throw e
+        }
+        return copy.path
     }
 
     private fun copiesDir() = File(cacheDir, "documents").apply { mkdirs() }

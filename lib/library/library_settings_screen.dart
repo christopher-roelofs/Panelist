@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
 import '../app/providers.dart';
+import '../data/database.dart';
 import '../platform/android_documents.dart';
 import 'comic_info_editor.dart';
 import 'library_providers.dart';
@@ -60,6 +61,47 @@ Future<void> chooseLibraryFolder(BuildContext context, WidgetRef ref) async {
   unawaited(ref.read(libraryScanProvider.notifier).scan());
 }
 
+/// Whether Panelist may change files in the Android library folder
+/// [location] (always true for desktop folders).
+final canWriteFolderProvider = FutureProvider.family<bool, String>(
+  (ref, location) => AndroidDocuments.isContentUri(location)
+      ? AndroidDocuments.canWrite(location)
+      : Future.value(true),
+);
+
+/// Asks Android again for [root] with write access (folders added before
+/// editing came were read-only). Choosing it again keeps the library.
+Future<void> allowEditing(
+  BuildContext context,
+  WidgetRef ref,
+  LibraryRoot root,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final tree = await AndroidDocuments.pickTree();
+  if (tree == null) return;
+  ref.invalidate(canWriteFolderProvider(root.location));
+  if (tree.uri != root.location) {
+    // A different folder: its permission isn't needed.
+    await AndroidDocuments.release(tree.uri);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'That’s a different folder. Choose ${root.name} to allow editing '
+          'it, or use Change folder.',
+        ),
+      ),
+    );
+    return;
+  }
+  if (!await ref.read(canWriteFolderProvider(root.location).future)) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Android didn’t allow changes to that folder.'),
+      ),
+    );
+  }
+}
+
 /// The library folder: which it is, change it, organise it.
 class LibrarySettingsScreen extends ConsumerWidget {
   const LibrarySettingsScreen({super.key});
@@ -87,7 +129,7 @@ class LibrarySettingsScreen extends ConsumerWidget {
               leading: Icon(Icons.folder_off_outlined),
               title: Text('No folder chosen yet'),
             ),
-          for (final r in roots)
+          for (final r in roots) ...[
             ListTile(
               leading: const Icon(Icons.folder_outlined),
               title: Text(r.name),
@@ -96,6 +138,21 @@ class LibrarySettingsScreen extends ConsumerWidget {
                 '${comics.where((c) => c.entry.rootId == r.id).length} comics',
               ),
             ),
+            if (canEditMetadata &&
+                ref.watch(canWriteFolderProvider(r.location)).value == false)
+              ListTile(
+                leading: const Icon(Icons.edit_off_outlined),
+                title: const Text('Panelist can only read this folder'),
+                subtitle: const Text(
+                  'To save comic details, allow editing: choose the same '
+                  'folder again in the next screen.',
+                ),
+                trailing: FilledButton.tonal(
+                  onPressed: () => allowEditing(context, ref, r),
+                  child: const Text('Allow editing'),
+                ),
+              ),
+          ],
           Padding(
             padding: const EdgeInsets.all(16),
             child: Wrap(
