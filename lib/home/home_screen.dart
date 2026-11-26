@@ -5,6 +5,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as p;
 
 import '../app/providers.dart';
 import '../core/sources/open_source.dart';
@@ -56,6 +57,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               FileSystemEntityType.notFound;
     if (!mounted) return;
     if (!exists) {
+      // In a library folder that's gone as a whole (a network drive not
+      // connected, a card not inserted): the comic is likely fine.
+      final away = (await ref.read(databaseProvider).roots())
+          .where(
+            (r) =>
+                !AndroidDocuments.isContentUri(r.location) &&
+                p.isWithin(r.location, book.path) &&
+                !Directory(r.location).existsSync(),
+          )
+          .firstOrNull;
+      if (!mounted) return;
+      if (away != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${away.location} can’t be reached right now. If it’s a '
+              'network drive, check it’s connected.',
+            ),
+          ),
+        );
+        return;
+      }
       final remove = await showDialog<bool>(
         context: context,
         builder: (dialog) => AlertDialog(

@@ -149,6 +149,9 @@ typedef TagResult = ({
   int skipped,
   List<Unmatched> unmatched,
   List<String> errors,
+
+  /// Originals converted to CBZ first but kept (no trash to move them to).
+  List<String> kept,
 });
 
 /// Looks each comic up and saves what it finds into the file. [providers]
@@ -170,6 +173,7 @@ Future<TagResult> tagComics(
   var tagged = 0, failed = 0, skipped = 0;
   final unmatched = <Unmatched>[];
   final errors = <String>[];
+  final kept = <String>[];
   final usable = [...providers];
   for (final (i, original) in comics.indexed) {
     if (shouldStop?.call() ?? false) break;
@@ -179,6 +183,7 @@ Future<TagResult> tagComics(
       if (isConvertibleComic(comic)) {
         final c = await convertComics(db, [comic], trash: trash);
         if (c.failed > 0) throw Exception(c.errors.first);
+        kept.addAll(c.keptFiles);
         final cbz = p.setExtension(comic.location, '.cbz');
         comic = LibraryComic(
           comic.entry.copyWith(location: cbz, fileName: p.basename(cbz)),
@@ -261,6 +266,7 @@ Future<TagResult> tagComics(
     skipped: skipped,
     unmatched: unmatched,
     errors: errors,
+    kept: kept,
   );
 }
 
@@ -485,6 +491,8 @@ Future<void> tagWithProgress(
   if (result == null) return;
   unawaited(ref.read(libraryScanProvider.notifier).scan());
   if (!context.mounted) return;
+  await offerToDeleteKept(context, ref, result.kept);
+  if (!context.mounted) return;
   if (result.unmatched.isEmpty && result.errors.isEmpty) {
     messenger.showSnackBar(SnackBar(content: Text(describeTagResult(result))));
     return;
@@ -615,6 +623,7 @@ class _TagReportState extends State<_TagReport> {
         skipped: result.skipped,
         unmatched: [...result.unmatched]..remove(u),
         errors: result.errors,
+        kept: result.kept,
       );
     });
     // Nothing left to see: done.
@@ -998,11 +1007,13 @@ Future<void> lookUpOne(
         ),
       ),
     );
+    String? kept;
     try {
       final conv = await convertToCbz(c.location);
       await db.moveBook(conv.oldId, conv.newId, conv.cbzPath);
-      if (File(c.location).existsSync()) {
-        await (await originalsRemover(ref))(c.location);
+      if (File(c.location).existsSync() &&
+          !await (await originalsRemover(ref))(c.location)) {
+        kept = c.location;
       }
       c = LibraryComic(
         c.entry.copyWith(
@@ -1024,6 +1035,9 @@ Future<void> lookUpOne(
       return;
     }
     navigator.pop();
+    if (kept != null && context.mounted) {
+      await offerToDeleteKept(context, ref, [kept]);
+    }
   }
   if (context.mounted) await editComicInfo(context, c, lookUp: true);
 }

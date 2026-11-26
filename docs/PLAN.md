@@ -357,6 +357,12 @@ newer).
   a network drive (kept there), (3) paths over 259 characters skipped in
   the rename preview, (4) reserved names get `_`. Still to check on the
   tablet: folder picker, drag and drop, full screen, touch, mapped drives.
+  Network drives (2026-11-26): Windows and macOS watch each library folder
+  once, subfolders included (a watch per folder would be hundreds of SMB
+  change requests); converted originals kept for want of a Recycle Bin are
+  listed after converting (Convert, Look up info) with an offer to delete
+  them; Continue reading says a library folder can't be reached instead of
+  "moved or deleted" when the whole folder is gone.
 - Windows (notes from before it was built). File
   operations use dart:io and should work, including on a mapped network
   drive (a rename within a share is done by the server, no copying). To

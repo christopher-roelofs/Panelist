@@ -225,6 +225,8 @@ void main() {
       ),
     ], trash: (_) async => false);
     expect((result.converted, result.kept), (1, 1));
+    // Listed, so it can be offered for deleting.
+    expect(result.keptFiles, [path]);
     expect(visibleFiles(), ['Saga 04.cbt', 'Saga 04.cbz']);
     expect(
       describeConvertResult(result),

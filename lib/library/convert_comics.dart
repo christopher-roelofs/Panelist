@@ -147,6 +147,9 @@ typedef ConvertResult = ({
   int kept,
   int failed,
   List<String> errors,
+
+  /// The originals that are [kept] (no trash to move them to).
+  List<String> keptFiles,
 });
 
 /// Converts each of [comics] to CBZ, moves its reading progress to the new
@@ -161,6 +164,7 @@ Future<ConvertResult> convertComics(
 }) async {
   var converted = 0, kept = 0, failed = 0;
   final errors = <String>[];
+  final keptFiles = <String>[];
   for (final (i, comic) in comics.indexed) {
     if (shouldStop?.call() ?? false) break;
     try {
@@ -169,6 +173,7 @@ Future<ConvertResult> convertComics(
       converted++;
       if (File(comic.location).existsSync() && !await trash(comic.location)) {
         kept++;
+        keptFiles.add(comic.location);
       }
     } on Object catch (e) {
       failed++;
@@ -177,7 +182,13 @@ Future<ConvertResult> convertComics(
       onProgress?.call(i + 1);
     }
   }
-  return (converted: converted, kept: kept, failed: failed, errors: errors);
+  return (
+    converted: converted,
+    kept: kept,
+    failed: failed,
+    errors: errors,
+    keptFiles: keptFiles,
+  );
 }
 
 String describeConvertResult(ConvertResult r) {
@@ -209,6 +220,82 @@ Future<void> convertWithProgress(
     SnackBar(
       content: Text(describeConvertResult(result)),
       duration: Duration(seconds: result.failed > 0 ? 10 : 4),
+    ),
+  );
+  if (context.mounted) await offerToDeleteKept(context, ref, result.keptFiles);
+}
+
+/// After converting: originals that couldn't go to the trash (a network
+/// drive has no Recycle Bin) would sit beside their CBZ in the library.
+/// Lists them and offers to delete them for good.
+Future<void> offerToDeleteKept(
+  BuildContext context,
+  WidgetRef ref,
+  List<String> files,
+) async {
+  if (files.isEmpty) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final n = files.length;
+  final delete = await showDialog<bool>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      title: Text(n == 1 ? 'Delete the original?' : 'Delete the $n originals?'),
+      content: SizedBox(
+        width: 480,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${n == 1 ? 'This CBR/CB7/CBT file was' : 'These CBR/CB7/CBT files were'} '
+              'converted to CBZ but couldn’t go to the '
+              '${Platform.isWindows ? 'Recycle Bin' : 'trash'} (network '
+              'drives have none), so ${n == 1 ? 'it’s' : 'they’re'} still '
+              'in the library next to the CBZ. Deleting can’t be undone.',
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final f in files)
+                    Text(
+                      p.basename(f),
+                      style: Theme.of(dialog).textTheme.bodySmall,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialog).pop(false),
+          child: const Text('Keep them'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialog).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (delete != true) return;
+  var gone = 0;
+  for (final f in files) {
+    if (await deleteFile(f)) gone++;
+  }
+  unawaited(ref.read(libraryScanProvider.notifier).scan());
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        gone == files.length
+            ? 'Deleted ${gone == 1 ? '1 original' : '$gone originals'}'
+            : 'Deleted $gone of ${files.length}; the rest couldn’t be '
+                  'deleted (open somewhere?)',
+      ),
     ),
   );
 }

@@ -40,6 +40,24 @@ void main() {
     );
   });
 
+  test('one watch per library folder where trees can be watched', () async {
+    watcher.dispose();
+    watcher = LibraryWatcher(
+      onChange: () => changes++,
+      debounce: const Duration(milliseconds: 100),
+      recursive: true,
+    );
+    await watcher.watch([root.path]);
+    expect(watcher.watched, [p.normalize(root.path)]);
+    write('Saga 01.cbz');
+    await settle();
+    expect(changes, 1);
+    // A folder deleted (not marked as a folder in tree watches).
+    Directory(p.join(root.path, 'Saga')).deleteSync();
+    await settle();
+    expect(changes, 2);
+  });
+
   test('comics added in a subfolder cause one change', () async {
     await watcher.watch([root.path]);
     write('Saga/Saga 01.cbz');
