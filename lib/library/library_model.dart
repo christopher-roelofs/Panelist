@@ -23,7 +23,8 @@ bool sameSeries(String a, String b) {
 }
 
 class LibraryComic {
-  LibraryComic(this.entry, this.progress);
+  LibraryComic(this.entry, this.progress, {String? publisher})
+    : publisher = publisher ?? entry.publisher;
 
   final LibraryEntry entry;
 
@@ -98,8 +99,9 @@ class LibraryComic {
 
   int? get year => yearWithSource?.$1;
 
-  /// From ComicInfo only; null means unknown.
-  String? get publisher => entry.publisher;
+  /// From ComicInfo only, as the user's publisher rules name it; null means
+  /// unknown.
+  final String? publisher;
 
   /// "#3 (2008)", or the file name when there's no number.
   String get issueLabel {

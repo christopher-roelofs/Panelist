@@ -7,6 +7,7 @@ import '../library/comic_info_editor.dart';
 import '../library/info_lookup.dart';
 import '../library/library_providers.dart';
 import '../library/library_settings_screen.dart';
+import '../library/publisher_names_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -85,6 +86,19 @@ class SettingsScreen extends ConsumerWidget {
           if (canEditMetadata) ...[
             heading('Comic details'),
             const LookupSettings(),
+            ListTile(
+              leading: const Icon(Icons.business_outlined),
+              title: const Text('Publisher names'),
+              subtitle: const Text(
+                'Show one name for a publisher written several ways',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const PublisherNamesScreen(),
+                ),
+              ),
+            ),
           ],
           heading('Library'),
           ListTile(

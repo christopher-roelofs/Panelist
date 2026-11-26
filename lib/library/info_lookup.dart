@@ -20,6 +20,7 @@ import 'comic_info_editor.dart';
 import 'convert_comics.dart';
 import 'library_model.dart';
 import 'library_scanner.dart';
+import 'publisher_aliases.dart';
 
 /// A comic database Panelist can look details up in. Adding one: write a
 /// [LookupProvider] and list it in [lookupServices].
@@ -156,6 +157,7 @@ Future<TagResult> tagComics(
   void Function(int done)? onProgress,
   bool Function()? shouldStop,
   Future<bool> Function(String path) trash = moveToTrash,
+  PublisherAliases aliases = const PublisherAliases(),
 }) async {
   var tagged = 0, failed = 0, skipped = 0;
   final unmatched = <Unmatched>[];
@@ -210,6 +212,7 @@ Future<TagResult> tagComics(
             id = match.id;
           }
           await provider.apply(doc, id);
+          doc['Publisher'] = aliases.apply(doc['Publisher']);
           await saveComicInfo(db, comic, doc);
           tagged++;
           done = true;
@@ -484,6 +487,8 @@ class _TagDialogState extends ConsumerState<_TagDialog> {
         if (mounted) setState(() => _done = n);
       },
       shouldStop: () => _stopping,
+      aliases:
+          ref.read(publisherAliasesProvider).value ?? const PublisherAliases(),
     );
     if (mounted) Navigator.of(context).pop(result);
   }
@@ -730,6 +735,8 @@ class _ChooseDialogState extends ConsumerState<_ChooseDialog> {
     setState(() => _busy = true);
     try {
       await r.provider.apply(widget.doc, r.id);
+      final aliases = await ref.read(publisherAliasesProvider.future);
+      widget.doc['Publisher'] = aliases.apply(widget.doc['Publisher']);
       // Later issues of this series are found by its ID.
       r.provider
         ..rememberSeries(widget.series, r)

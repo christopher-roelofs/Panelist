@@ -230,3 +230,28 @@ newer).
   something fits, with "Search <next> too". A publisher in ComicInfo breaks
   ties between same-named series. Adding a provider: a class plus an entry
   in `lookupServices`.
+- Promo clean-up (M6 step 5, desktop): `promoPages` takes no word list.
+  With digits stood in for, most page names share one pattern; the pages
+  at the *end* that don't (`zSoU-Nerd.jpg`, `zzz-mephisto.jpg`, named to
+  sort last) are candidates. Never the start (an oddly named cover), never
+  without a clear pattern (75% of pages, at least 4), at most 3. On the
+  2026.11.18 pack: 20 found in 67 comics, no false ones. "Remove promo
+  pages" (issue and group sheets) scans, shows each page's image to
+  untick, then rewrites the CBZ (temp, verified, renamed; ComicInfo
+  PageCount/`<Pages>` updated; CBR converted first) and moves progress to
+  the new book ID.
+- Rename / organise (M6 step 5, desktop): template, default
+  `{series} {number:3} ({year})` (no `{title}`; `{title:N}` shortens at a
+  word). Fields: series, number, year, volume, publisher, title. No `/`:
+  rename in place; with `/`: folders inside the library folder. Missing
+  fields drop out with their brackets; `A: B` → `A - B`; unsafe characters
+  removed. Preview first; existing files and shared names are skipped,
+  never overwritten; emptied folders are removed (never the library
+  folder). Book IDs are content-based, so only the stored path changes.
+  The template used last is remembered.
+- Publisher names (M6 step 5): the user's own rules (none built in), from
+  → to, compared ignoring case and punctuation. Used for library grouping
+  and display, for lookups before saving, and for `{publisher}` in renames.
+  Settings → Publisher names suggests rules from the library's own names:
+  the same name written differently, or one name plus words (`Image` /
+  `Image Comics`); the name more comics use wins, the fuller on a tie.

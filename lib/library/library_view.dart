@@ -16,6 +16,8 @@ import 'library_model.dart';
 import 'library_providers.dart';
 import 'library_scanner.dart';
 import 'library_settings_screen.dart';
+import 'promo_cleanup.dart';
+import 'rename_comics.dart';
 
 /// The home screen's scrolling body: [leading] slivers (Continue reading),
 /// then the library, browsable by folder, series or publisher. Back goes
@@ -261,6 +263,18 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                   unawaited(tagWithProgress(context, ref, [c]));
                 }
               : null,
+          onClean: canCleanComic(c)
+              ? () {
+                  Navigator.of(sheet).pop();
+                  unawaited(cleanPromosWithReview(context, ref, [c]));
+                }
+              : null,
+          onRename: canRenameComic(c)
+              ? () {
+                  Navigator.of(sheet).pop();
+                  unawaited(renameWithPreview(context, ref, [c]));
+                }
+              : null,
         ),
       );
     }
@@ -268,6 +282,7 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
     return () => showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheet) => _GroupSheet(
         item: item,
         onMark: _mark,
@@ -278,6 +293,14 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
         onLookUp: (comics) {
           Navigator.of(sheet).pop();
           unawaited(tagWithProgress(context, ref, comics));
+        },
+        onClean: (comics) {
+          Navigator.of(sheet).pop();
+          unawaited(cleanPromosWithReview(context, ref, comics));
+        },
+        onRename: (comics) {
+          Navigator.of(sheet).pop();
+          unawaited(renameWithPreview(context, ref, comics));
         },
         onEdit: canEditMetadata && item.field != null
             ? () {
@@ -855,9 +878,17 @@ class _DetailsSheet extends StatelessWidget {
     required this.onEdit,
     required this.onConvert,
     required this.onLookUp,
+    required this.onClean,
+    required this.onRename,
   });
 
   final LibraryComic comic;
+
+  /// Renames the file by the name template; null where it can't be.
+  final VoidCallback? onRename;
+
+  /// Looks for promo pages to remove; null where it can't.
+  final VoidCallback? onClean;
 
   /// Looks the comic's details up; null where it can't be.
   final VoidCallback? onLookUp;
@@ -882,8 +913,8 @@ class _DetailsSheet extends StatelessWidget {
       ('Year', year == null ? 'Unknown' : '${year.$1}', year?.$2),
       (
         'Publisher',
-        e.publisher ?? 'Unknown',
-        e.publisher == null ? null : FieldSource.comicInfo,
+        comic.publisher ?? 'Unknown',
+        comic.publisher == null ? null : FieldSource.comicInfo,
       ),
       if (e.title != null) ('Title', e.title!, FieldSource.comicInfo),
       if (e.pageCount != null) ('Pages', '${e.pageCount}', null),
@@ -920,6 +951,18 @@ class _DetailsSheet extends StatelessWidget {
                       onPressed: onLookUp,
                       icon: const Icon(Icons.travel_explore),
                       label: const Text('Look up info'),
+                    ),
+                  if (onClean != null)
+                    OutlinedButton.icon(
+                      onPressed: onClean,
+                      icon: const Icon(Icons.cleaning_services_outlined),
+                      label: const Text('Remove promo pages'),
+                    ),
+                  if (onRename != null)
+                    OutlinedButton.icon(
+                      onPressed: onRename,
+                      icon: const Icon(Icons.drive_file_rename_outline),
+                      label: const Text('Rename…'),
                     ),
                 ],
               ),
@@ -1048,9 +1091,17 @@ class _GroupSheet extends StatelessWidget {
     required this.onEdit,
     required this.onConvert,
     required this.onLookUp,
+    required this.onClean,
+    required this.onRename,
   });
 
   final _Item item;
+
+  /// Renames the given members' files by the name template.
+  final void Function(List<LibraryComic> comics) onRename;
+
+  /// Looks the given members over for promo pages.
+  final void Function(List<LibraryComic> comics) onClean;
 
   /// Looks the given members' details up.
   final void Function(List<LibraryComic> comics) onLookUp;
@@ -1073,6 +1124,7 @@ class _GroupSheet extends StatelessWidget {
         .length;
     final n = item.members.length;
     final convertible = item.members.where(isConvertibleComic).toList();
+    final renamable = item.members.where(canRenameComic).toList();
     // CBZ (by name, to stay cheap) and anything convertible to it.
     final taggable = canEditMetadata
         ? item.members
@@ -1084,7 +1136,7 @@ class _GroupSheet extends StatelessWidget {
               .toList()
         : const <LibraryComic>[];
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1118,6 +1170,22 @@ class _GroupSheet extends StatelessWidget {
                       taggable.length == 1
                           ? 'Look up info for 1'
                           : 'Look up info for ${taggable.length}',
+                    ),
+                  ),
+                if (taggable.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: () => onClean(taggable),
+                    icon: const Icon(Icons.cleaning_services_outlined),
+                    label: const Text('Remove promo pages'),
+                  ),
+                if (renamable.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: () => onRename(renamable),
+                    icon: const Icon(Icons.drive_file_rename_outline),
+                    label: Text(
+                      renamable.length == 1
+                          ? 'Rename 1…'
+                          : 'Rename ${renamable.length}…',
                     ),
                   ),
                 if (convertible.isNotEmpty)

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/providers.dart';
 import '../data/database.dart';
 import 'library_model.dart';
+import 'publisher_aliases.dart';
 
 final libraryRootsProvider = StreamProvider<List<LibraryRoot>>(
   (ref) => ref.watch(databaseProvider).watchRoots(),
@@ -18,13 +19,20 @@ final _progressProvider = StreamProvider<Map<String, BookProgress>>(
   (ref) => ref.watch(databaseProvider).watchProgress(),
 );
 
-/// Every comic in the library, with reading progress.
+/// Every comic in the library, with reading progress, and publishers named
+/// by the user's rules.
 final libraryComicsProvider = Provider<List<LibraryComic>>((ref) {
   final entries = ref.watch(_entriesProvider).value ?? const [];
   final progress = ref.watch(_progressProvider).value ?? const {};
+  final aliases =
+      ref.watch(publisherAliasesProvider).value ?? const PublisherAliases();
   return [
     for (final e in entries)
-      LibraryComic(e, e.bookId == null ? null : progress[e.bookId]),
+      LibraryComic(
+        e,
+        e.bookId == null ? null : progress[e.bookId],
+        publisher: aliases.apply(e.publisher),
+      ),
   ];
 });
 
