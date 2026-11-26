@@ -11,6 +11,7 @@ import '../core/metadata/comic_info_document.dart';
 import '../core/metadata/comic_info_writer.dart';
 import '../core/sources/fingerprint.dart';
 import '../core/sources/open_source.dart';
+import '../core/util/file_errors.dart';
 import '../data/book_extensions.dart';
 import '../platform/android_documents.dart';
 import 'info_lookup.dart';
@@ -295,7 +296,7 @@ class _ComicInfoEditorState extends ConsumerState<ComicInfoEditor> {
       await writeComicInfoToCbz(_comic.location, xml);
     } on Object catch (e) {
       if (mounted) setState(() => _saving = false);
-      messenger.showSnackBar(SnackBar(content: Text('$e')));
+      messenger.showSnackBar(SnackBar(content: Text(describeFileError(e))));
       return;
     }
     // Show the new details right away: the opened book's stored metadata,

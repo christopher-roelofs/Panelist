@@ -337,7 +337,17 @@ newer).
   go into the device's library folder (today they're in app storage,
   `downloads/<book ID>/`, and vanish with the app's data). Downloading
   into the library folder on desktops comes with it.
-- Windows (when it gets its turn; never built or run there yet). File
+- Windows build (2026-11-26): `windows/` added; `.github/workflows/
+  windows.yml` builds on windows-latest, adds libarchive from vcpkg
+  (`archive.dll` + zlib, bzip2, xz, zstd, lz4 DLLs) and the MSVC runtime,
+  starts the app for 10 s, and uploads `panelist-windows-x64.zip`. The
+  runner implements `panelist/window` (borderless full screen, title).
+  Done of the list below: (1) "close it first" for locked files
+  (`describeFileError`), (2) Recycle Bin through PowerShell/.NET, never on
+  a network drive (kept there), (3) paths over 259 characters skipped in
+  the rename preview, (4) reserved names get `_`. Still to check on the
+  tablet: folder picker, drag and drop, full screen, touch, mapped drives.
+- Windows (notes from before it was built). File
   operations use dart:io and should work, including on a mapped network
   drive (a rename within a share is done by the server, no copying). To
   do: (1) an open comic is locked on Windows, so saving or moving it

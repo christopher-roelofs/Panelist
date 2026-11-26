@@ -1,0 +1,56 @@
+name: Windows
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.50.1
+          channel: stable
+          cache: true
+
+      # libarchive for CBR/CB7/CBT, with permissive codecs only (zlib,
+      # bzip2, xz, zstd, lz4; libarchive's own RAR reader, no unrar).
+      - name: Cache libarchive
+        uses: actions/cache@v4
+        with:
+          path: C:/vcpkg/installed
+          key: vcpkg-libarchive-x64-windows-v1
+      - name: Build libarchive
+        run: vcpkg install "libarchive[core,bzip2,lz4,lzma,zstd]:x64-windows"
+
+      - run: flutter pub get
+      - run: flutter build windows --release
+
+      - name: Bundle
+        shell: pwsh
+        run: |
+          $out = "build/windows/x64/runner/Release"
+          # archive.dll and the codecs it loads, next to panelist.exe.
+          Copy-Item "C:/vcpkg/installed/x64-windows/bin/*.dll" $out
+          # The Visual C++ runtime, so it runs without installing it.
+          foreach ($d in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "C:/Windows/System32/$d" $out
+          }
+          Get-ChildItem $out -Filter *.dll | Select-Object Name, Length
+          Compress-Archive -Path "$out/*" -DestinationPath panelist-windows-x64.zip
+
+      # Starts the app for a few seconds: catches a missing DLL.
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $p = Start-Process build/windows/x64/runner/Release/panelist.exe -PassThru
+          Start-Sleep -Seconds 10
+          if ($p.HasExited) { throw "panelist.exe exited with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: panelist-windows-x64
+          path: panelist-windows-x64.zip

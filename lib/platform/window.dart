@@ -3,9 +3,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Desktop window controls. On Linux these are implemented by the GTK
-/// runner (`linux/runner/my_application.cc`); elsewhere they are no-ops
-/// until those runners implement the same channel.
+/// Desktop window controls, implemented by the Linux runner
+/// (`linux/runner/my_application.cc`) and the Windows runner
+/// (`windows/runner/flutter_window.cpp`); no-ops on others (macOS) until
+/// their runners implement the same channel.
 const _channel = MethodChannel('panelist/window');
 
 bool get isDesktop =>

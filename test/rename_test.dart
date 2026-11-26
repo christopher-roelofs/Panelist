@@ -187,6 +187,24 @@ void main() {
       );
     });
 
+    test('paths too long for Windows are skipped, not tried', () {
+      final a = comic('a.cbz', series: 'Saga', number: '1', year: 2012);
+      final short = planRenames(
+        [a],
+        defaultRenameTemplate,
+        (_) => dir.path,
+        maxPath: 1000,
+      );
+      expect(short.single.state, RenameState.rename);
+      final long = planRenames(
+        [a],
+        defaultRenameTemplate,
+        (_) => dir.path,
+        maxPath: dir.path.length + 5,
+      );
+      expect(long.single.state, RenameState.tooLong);
+    });
+
     test(
       'organises into folders, keeps progress, removes empty folders',
       () async {

@@ -11,6 +11,7 @@ import '../core/sources/archive_page_source.dart';
 import '../core/sources/cbz_page_source.dart';
 import '../core/sources/open_source.dart';
 import '../core/sources/page_source.dart';
+import '../core/util/file_errors.dart';
 import '../data/database.dart';
 import 'comic_info_editor.dart';
 import 'convert_comics.dart';
@@ -104,7 +105,7 @@ Future<CleanResult> removePromos(
       pages += f.pages.length;
     } on Object catch (e) {
       failed++;
-      errors.add('${f.comic.entry.fileName}: $e');
+      errors.add('${f.comic.entry.fileName}: ${describeFileError(e)}');
     } finally {
       onProgress?.call(i + 1);
     }

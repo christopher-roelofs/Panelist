@@ -116,8 +116,16 @@ String _tidy(String s) {
   // Windows refuses names ending in a dot or space.
   t = t.replaceAll(RegExp(r'[.\s]+$'), '');
   if (t.length > 150) t = t.substring(0, 150).trimRight();
+  // Names Windows reserves for devices (`CON`, `AUX`, `COM1`…), also with
+  // an extension after them.
+  if (_reserved.hasMatch(t)) t = '${t}_';
   return t;
 }
+
+final _reserved = RegExp(
+  r'^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\..*)?$',
+  caseSensitive: false,
+);
 
 /// The fields in [template] that have no value in [values], in order.
 List<String> missingFields(String template, Map<String, String?> values) => {

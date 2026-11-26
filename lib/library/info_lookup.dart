@@ -17,6 +17,7 @@ import '../core/metadata/lookup/lookup_cache.dart';
 import '../core/metadata/lookup/lookup_provider.dart';
 import '../core/metadata/lookup/metron_provider.dart';
 import '../core/sources/open_source.dart';
+import '../core/util/file_errors.dart';
 import '../data/book_extensions.dart';
 import '../data/database.dart';
 import 'comic_info_editor.dart';
@@ -248,7 +249,7 @@ Future<TagResult> tagComics(
       }
     } on Object catch (e) {
       failed++;
-      errors.add('${comic.entry.fileName}: $e');
+      errors.add('${comic.entry.fileName}: ${describeFileError(e)}');
     } finally {
       onProgress?.call(i + 1);
     }
@@ -966,8 +967,9 @@ Future<void> lookUpOne(
     } on Object catch (e) {
       navigator.pop();
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Couldn’t convert: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Couldn’t convert: ${describeFileError(e)}')),
+        );
       }
       return;
     }

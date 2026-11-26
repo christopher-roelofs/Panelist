@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../app/providers.dart';
 import '../core/metadata/comic_info_document.dart';
 import '../core/sources/open_source.dart';
+import '../core/util/file_errors.dart';
 import '../data/database.dart';
 import '../platform/android_documents.dart';
 import 'comic_info_editor.dart';
@@ -70,7 +71,10 @@ LibraryComic withDetails(
   publisher: aliases.apply(doc['Publisher']),
 );
 
-enum RenameState { rename, same, clash, exists, noName }
+enum RenameState { rename, same, clash, exists, noName, tooLong }
+
+/// The longest path Windows takes unless long paths are turned on.
+final int? _maxPath = Platform.isWindows ? 259 : null;
 
 /// Where one comic would go.
 typedef RenamePlan = ({LibraryComic comic, String? target, RenameState state});
@@ -84,7 +88,11 @@ List<RenamePlan> planRenames(
   String template,
   String? Function(LibraryComic) rootOf, {
   bool Function(String path)? exists,
+
+  /// Longer paths are skipped ([RenameState.tooLong]); on Windows, 259.
+  int? maxPath,
 }) {
+  final longest = maxPath ?? _maxPath;
   final there =
       exists ??
       (path) =>
@@ -103,6 +111,8 @@ List<RenamePlan> planRenames(
         p.extension(c.location).toLowerCase();
     final state = target == c.location
         ? RenameState.same
+        : longest != null && target.length > longest
+        ? RenameState.tooLong
         // Only the letters' case changes: the "existing" file is this one.
         : there(target) && target.toLowerCase() != c.location.toLowerCase()
         ? RenameState.exists
@@ -157,7 +167,7 @@ Future<RenameResult> renameComics(
       renamed++;
     } on Object catch (e) {
       failed++;
-      errors.add('${r.comic.entry.fileName}: $e');
+      errors.add('${r.comic.entry.fileName}: ${describeFileError(e)}');
     } finally {
       onProgress?.call(i + 1);
     }
@@ -404,6 +414,7 @@ class _RenameDialogState extends ConsumerState<_RenameDialog> {
             RenameState.clash => '$n would share a name',
             RenameState.exists => '$n would replace another file',
             RenameState.noName => '$n without the details to name',
+            RenameState.tooLong => '$n with paths too long for Windows',
             RenameState.rename => null,
           },
     ].nonNulls.join(' · ');
@@ -552,6 +563,9 @@ class _RenameDialogState extends ConsumerState<_RenameDialog> {
                             RenameState.exists =>
                               'a file with this name exists',
                             RenameState.noName => 'no series or number',
+                            RenameState.tooLong =>
+                              'path too long for Windows (over 259 '
+                                  'characters); shorten the template',
                           },
                           if (r.state != RenameState.noName &&
                               missing[r]!.isNotEmpty)

@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import '../app/providers.dart';
 import '../core/metadata/cbz_converter.dart';
 import '../core/sources/open_source.dart';
+import '../core/util/file_errors.dart';
 import '../data/database.dart';
 import '../platform/android_documents.dart';
 import 'comic_info_editor.dart';
@@ -59,6 +60,8 @@ String originalFate(WidgetRef ref) =>
     ? 'The original is deleted.'
     : Platform.isLinux
     ? 'The original goes to the trash.'
+    : Platform.isWindows
+    ? 'The original goes to the Recycle Bin (on a network drive it’s kept).'
     : 'The original is kept.';
 
 /// Settings row: trash or delete converted originals.
@@ -74,6 +77,8 @@ class ConvertedOriginalsTile extends ConsumerWidget {
       subtitle: Text(
         delete
             ? 'The CBR/CB7/CBT original is deleted'
+            : Platform.isWindows
+            ? 'The CBR/CB7/CBT original goes to the Recycle Bin'
             : 'The CBR/CB7/CBT original goes to the trash',
       ),
       trailing: DropdownButton<bool>(
@@ -95,9 +100,10 @@ class ConvertedOriginalsTile extends ConsumerWidget {
   }
 }
 
-/// Moves [path] to the desktop's trash. False if there's no trash to use
-/// (the file is then left where it is).
+/// Moves [path] to the desktop's trash (the Recycle Bin on Windows). False
+/// if there's no trash to use (the file is then left where it is).
 Future<bool> moveToTrash(String path) async {
+  if (Platform.isWindows) return _recycle(path);
   if (!Platform.isLinux) return false;
   for (final gio in ['/usr/bin/gio', 'gio']) {
     try {
@@ -108,6 +114,31 @@ Future<bool> moveToTrash(String path) async {
     }
   }
   return false;
+}
+
+/// The Recycle Bin, through .NET (no extra package). Network drives have
+/// none (Windows would delete for good), so a file there is kept. The path
+/// goes in through the environment, never into the command's text.
+Future<bool> _recycle(String path) async {
+  const script = r'''
+$p = $env:PANELIST_TRASH
+if ($p.StartsWith('\\') -or
+    ([System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($p))).DriveType -eq 'Network') {
+  exit 2
+}
+Add-Type -AssemblyName Microsoft.VisualBasic
+[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, 'OnlyErrorDialogs', 'SendToRecycleBin')
+''';
+  try {
+    final r = await Process.run(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      environment: {'PANELIST_TRASH': path},
+    );
+    return r.exitCode == 0 && !File(path).existsSync();
+  } on ProcessException {
+    return false;
+  }
 }
 
 /// What converting did.
@@ -141,7 +172,7 @@ Future<ConvertResult> convertComics(
       }
     } on Object catch (e) {
       failed++;
-      errors.add('$e');
+      errors.add(describeFileError(e));
     } finally {
       onProgress?.call(i + 1);
     }
