@@ -46,21 +46,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _openRecent(Book book) async {
-    final exists = AndroidDocuments.isContentUri(book.path)
+    // A shared library's comic opens over the network (or its download);
+    // the reader says if that fails.
+    final exists = isRemoteLocation(book.path)
+        ? true
+        : AndroidDocuments.isContentUri(book.path)
         ? await AndroidDocuments.exists(book.path)
         : await FileSystemEntity.type(book.path) !=
               FileSystemEntityType.notFound;
     if (!mounted) return;
     if (!exists) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('"${book.displayTitle}" was moved or deleted.'),
-          action: SnackBarAction(
-            label: 'Remove',
-            onPressed: () => _forget(book),
+      final remove = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: const Text('Comic not found'),
+          content: Text(
+            '"${book.displayTitle}" was moved or deleted. Remove it from '
+            'Continue reading?',
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialog).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialog).pop(true),
+              child: const Text('Remove from recent'),
+            ),
+          ],
         ),
       );
+      if (remove ?? false) await _forget(book);
       return;
     }
     await openInReader(context, ref, book.path);
