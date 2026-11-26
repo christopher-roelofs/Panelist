@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:panelist/core/metadata/comic_info_document.dart';
 import 'package:panelist/data/database.dart';
 import 'package:panelist/library/library_model.dart';
+import 'package:panelist/library/publisher_aliases.dart';
 import 'package:panelist/library/rename_comics.dart';
 import 'package:panelist/library/rename_template.dart';
 import 'package:path/path.dart' as p;
@@ -242,6 +244,79 @@ void main() {
         exists: (path) => path.toLowerCase() == a.location.toLowerCase(),
       );
       expect(plans.single.state, RenameState.rename);
+    });
+    test('organizing the library: nested folders emptied, Stop keeps what '
+        'moved', () async {
+      final a = comic(
+        'old/week/a/Saga 1.cbz',
+        series: 'Saga',
+        number: '1',
+        year: 2012,
+        publisher: 'Image',
+      );
+      final b = comic(
+        'old/week/b/Saga 2.cbz',
+        series: 'Saga',
+        number: '2',
+        year: 2012,
+        publisher: 'Image',
+      );
+      final keep = File(p.join(dir.path, 'old', 'notes.txt'))
+        ..writeAsStringSync('mine');
+      final plans = planRenames(
+        [a, b],
+        organizeLayouts.first.template,
+        (_) => dir.path,
+      );
+      expect(plans.map((r) => p.relative(r.target!, from: dir.path)), [
+        'Image/Saga/Saga 001 (2012).cbz',
+        'Image/Saga/Saga 002 (2012).cbz',
+      ]);
+      var calls = 0;
+      final r = await renameComics(
+        db,
+        plans,
+        roots: {dir.path},
+        shouldStop: () => calls++ > 0,
+      );
+      expect(r.renamed, 1);
+      expect(File(plans.first.target!).existsSync(), isTrue);
+      expect(File(b.location).existsSync(), isTrue);
+      // a's folder went; b's is still in use; "old" keeps the notes.
+      expect(Directory(p.dirname(a.location)).existsSync(), isFalse);
+      expect(Directory(p.dirname(b.location)).existsSync(), isTrue);
+      expect(keep.existsSync(), isTrue);
+
+      final rest = await renameComics(db, [plans.last], roots: {dir.path});
+      expect(rest.renamed, 1);
+      expect(Directory(p.join(dir.path, 'old', 'week')).existsSync(), isFalse);
+      expect(Directory(p.join(dir.path, 'old')).existsSync(), isTrue);
+    });
+
+    test('one library folder', () async {
+      await db.addRoot('/a', 'a');
+      await db.addRoot('/b', 'b');
+      await db.setLibraryFolder('/c', 'c');
+      expect([for (final r in await db.roots()) r.location], ['/c']);
+      await db.setLibraryFolder('/c', 'c');
+      expect(await db.roots(), hasLength(1));
+    });
+
+    test('withDetails uses what was just saved', () {
+      final c = comic('x.cbz', series: 'Old', number: '9');
+      final doc = ComicInfoDocument.parse(
+        '<ComicInfo><Series>Saga</Series><Number>1</Number><Year>2012</Year>'
+        '<Publisher>Image</Publisher></ComicInfo>',
+      );
+      final aliases = const PublisherAliases().withRule(
+        'Image',
+        'Image Comics',
+      );
+      final w = withDetails(c, doc, aliases: aliases);
+      expect(
+        renderTemplate(organizeLayouts.first.template, templateValues(w)),
+        'Image Comics/Saga/Saga 001 (2012)',
+      );
     });
   });
 }

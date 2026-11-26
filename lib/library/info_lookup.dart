@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
 import '../app/providers.dart';
+import '../core/metadata/cbz_converter.dart';
 import '../core/metadata/comic_info.dart';
 import '../core/metadata/comic_info_document.dart';
 import '../core/metadata/comic_info_writer.dart';
@@ -19,8 +22,10 @@ import '../data/database.dart';
 import 'comic_info_editor.dart';
 import 'convert_comics.dart';
 import 'library_model.dart';
+import 'library_providers.dart';
 import 'library_scanner.dart';
 import 'publisher_aliases.dart';
+import 'rename_comics.dart';
 
 /// A comic database Panelist can look details up in. Adding one: write a
 /// [LookupProvider] and list it in [lookupServices].
@@ -158,6 +163,7 @@ Future<TagResult> tagComics(
   bool Function()? shouldStop,
   Future<bool> Function(String path) trash = moveToTrash,
   PublisherAliases aliases = const PublisherAliases(),
+  Future<void> Function(LibraryComic comic, ComicInfoDocument doc)? afterSave,
 }) async {
   var tagged = 0, failed = 0, skipped = 0;
   final unmatched = <Unmatched>[];
@@ -214,6 +220,7 @@ Future<TagResult> tagComics(
           await provider.apply(doc, id);
           doc['Publisher'] = aliases.apply(doc['Publisher']);
           await saveComicInfo(db, comic, doc);
+          await afterSave?.call(comic, doc);
           tagged++;
           done = true;
           break;
@@ -489,6 +496,7 @@ class _TagDialogState extends ConsumerState<_TagDialog> {
       shouldStop: () => _stopping,
       aliases:
           ref.read(publisherAliasesProvider).value ?? const PublisherAliases(),
+      afterSave: (comic, doc) => keepOrganized(ref, comic, doc),
     );
     if (mounted) Navigator.of(context).pop(result);
   }
@@ -878,6 +886,194 @@ class _ChooseDialogState extends ConsumerState<_ChooseDialog> {
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Looks one comic up, letting the user choose the match. A CBR/CB7/CBT is
+/// converted to CBZ first (after asking: the original goes to the trash),
+/// since only CBZ can hold the details.
+Future<void> lookUpOne(
+  BuildContext context,
+  WidgetRef ref,
+  LibraryComic comic,
+) async {
+  var c = comic;
+  if (isConvertibleComic(c)) {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Convert to CBZ?'),
+        content: Text(
+          '${p.basename(c.location)} is a '
+          '${p.extension(c.location).substring(1).toUpperCase()} file, which '
+          'can’t hold comic details. It’s converted to CBZ first (same '
+          'pages, nothing recompressed) and the original goes to the trash.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Convert and look up'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final db = ref.read(databaseProvider);
+    final navigator = Navigator.of(context);
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: Row(
+            children: [
+              SizedBox.square(
+                dimension: 24,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              SizedBox(width: 16),
+              Text('Converting to CBZ…'),
+            ],
+          ),
+        ),
+      ),
+    );
+    try {
+      final conv = await convertToCbz(c.location);
+      await db.moveBook(conv.oldId, conv.newId, conv.cbzPath);
+      if (File(c.location).existsSync()) await moveToTrash(c.location);
+      c = LibraryComic(
+        c.entry.copyWith(
+          location: conv.cbzPath,
+          fileName: p.basename(conv.cbzPath),
+          bookId: Value(conv.newId),
+        ),
+        c.progress,
+        publisher: c.publisher,
+      );
+      unawaited(ref.read(libraryScanProvider.notifier).scan());
+    } on Object catch (e) {
+      navigator.pop();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Couldn’t convert: $e')));
+      }
+      return;
+    }
+    navigator.pop();
+  }
+  if (context.mounted) await editComicInfo(context, c, lookUp: true);
+}
+
+/// Whether [comic] can be looked up in a batch: CBZ, or convertible to it
+/// (by name, so it's cheap for the whole library).
+bool canLookUpComic(LibraryComic comic) =>
+    canEditMetadata &&
+    (isConvertibleComic(comic) ||
+        p.extension(comic.entry.fileName).toLowerCase() == '.cbz');
+
+/// Whether [comic]'s saved details lack what a lookup fills in: series,
+/// number, year and publisher, all from its ComicInfo (not guessed from
+/// the file name).
+bool isMissingDetails(LibraryComic comic) {
+  final e = comic.entry;
+  bool blank(String? s) => s == null || s.trim().isEmpty;
+  return blank(e.series) ||
+      blank(e.number) ||
+      e.year == null ||
+      blank(e.publisher);
+}
+
+/// Looks up the whole library: asks whether only comics missing details
+/// (the default) or all of them, then runs [tagWithProgress].
+Future<void> lookUpLibrary(BuildContext context, WidgetRef ref) async {
+  final comics = ref.read(libraryComicsProvider).where(canLookUpComic).toList();
+  final missing = comics.where(isMissingDetails).toList();
+  final chosen = await showDialog<List<LibraryComic>>(
+    context: context,
+    builder: (_) => _LookUpLibraryDialog(all: comics, missing: missing),
+  );
+  if (chosen == null || chosen.isEmpty || !context.mounted) return;
+  await tagWithProgress(context, ref, chosen);
+}
+
+class _LookUpLibraryDialog extends StatefulWidget {
+  const _LookUpLibraryDialog({required this.all, required this.missing});
+  final List<LibraryComic> all;
+  final List<LibraryComic> missing;
+
+  @override
+  State<_LookUpLibraryDialog> createState() => _LookUpLibraryDialogState();
+}
+
+class _LookUpLibraryDialogState extends State<_LookUpLibraryDialog> {
+  bool _all = false;
+
+  String _n(int n) => n == 1 ? '1 comic' : '$n comics';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final chosen = _all ? widget.all : widget.missing;
+    return AlertDialog(
+      title: const Text('Look up info'),
+      content: SizedBox(
+        width: 460,
+        child: RadioGroup<bool>(
+          groupValue: _all,
+          onChanged: (v) => setState(() => _all = v!),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RadioListTile<bool>(
+                value: false,
+                contentPadding: EdgeInsets.zero,
+                title: Text('Missing details · ${_n(widget.missing.length)}'),
+                subtitle: const Text(
+                  'Comics whose details lack a series, number, year or '
+                  'publisher. Comics already filled in are left alone.',
+                ),
+              ),
+              RadioListTile<bool>(
+                value: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text('All · ${_n(widget.all.length)}'),
+                subtitle: const Text(
+                  'Looks every comic up again, replacing details with what '
+                  'the lookup finds.',
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'PDFs are left out (their details can’t be saved).',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: chosen.isEmpty
+              ? null
+              : () => Navigator.of(context).pop(chosen),
+          child: Text(
+            chosen.isEmpty
+                ? 'Nothing to look up'
+                : 'Look up ${_n(chosen.length)}',
+          ),
         ),
       ],
     );

@@ -252,15 +252,10 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                   unawaited(convertWithProgress(context, ref, [c]));
                 }
               : null,
-          onLookUp: isEditableComic(c.location)
+          onLookUp: isEditableComic(c.location) || isConvertibleComic(c)
               ? () {
                   Navigator.of(sheet).pop();
-                  unawaited(editComicInfo(context, c, lookUp: true));
-                }
-              : isConvertibleComic(c)
-              ? () {
-                  Navigator.of(sheet).pop();
-                  unawaited(tagWithProgress(context, ref, [c]));
+                  unawaited(lookUpOne(context, ref, c));
                 }
               : null,
           onClean: canCleanComic(c)
@@ -519,9 +514,9 @@ class _SetUpLibrary extends ConsumerWidget {
                 runSpacing: 12,
                 children: [
                   FilledButton.icon(
-                    onPressed: () => addLibraryFolder(ref),
+                    onPressed: () => chooseLibraryFolder(context, ref),
                     icon: const Icon(Icons.create_new_folder_outlined),
-                    label: const Text('Add library folder'),
+                    label: const Text('Choose library folder'),
                   ),
                   OutlinedButton.icon(
                     onPressed: onOpenFile,
@@ -581,6 +576,18 @@ class _Header extends StatelessWidget {
                   selected: {prefs.view},
                   onSelectionChanged: (s) => onView(s.single),
                 ),
+                if (canEditMetadata)
+                  IconButton(
+                    tooltip: 'Look up info',
+                    icon: const Icon(Icons.travel_explore),
+                    onPressed: () => lookUpLibrary(context, ref),
+                  ),
+                if (canEditMetadata)
+                  IconButton(
+                    tooltip: 'Organize library',
+                    icon: const Icon(Icons.account_tree_outlined),
+                    onPressed: () => organizeLibrary(context, ref),
+                  ),
                 IconButton(
                   tooltip: prefs.layout == LibraryLayout.grid
                       ? 'Show as list'

@@ -103,7 +103,7 @@ class SettingsScreen extends ConsumerWidget {
           heading('Library'),
           ListTile(
             leading: const Icon(Icons.folder_outlined),
-            title: const Text('Library folders'),
+            title: const Text('Library folder'),
             subtitle: Text(switch (roots.length) {
               0 => 'None yet',
               1 => roots.single.name,

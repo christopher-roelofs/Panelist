@@ -268,6 +268,19 @@ class AppDatabase extends _$AppDatabase {
         mode: InsertMode.insertOrIgnore,
       );
 
+  /// Makes [location] the one library folder: other folders leave the
+  /// library (their files and reading progress are kept).
+  Future<void> setLibraryFolder(String location, String name) =>
+      transaction(() async {
+        final others = await (select(
+          libraryRoots,
+        )..where((r) => r.location.equals(location).not())).get();
+        for (final r in others) {
+          await removeRoot(r.id);
+        }
+        await addRoot(location, name);
+      });
+
   Future<void> removeRoot(int id) => transaction(() async {
     await (delete(libraryEntries)..where((e) => e.rootId.equals(id))).go();
     await (delete(libraryRoots)..where((r) => r.id.equals(id))).go();

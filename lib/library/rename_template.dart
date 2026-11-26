@@ -118,3 +118,19 @@ String _tidy(String s) {
   if (t.length > 150) t = t.substring(0, 150).trimRight();
   return t;
 }
+
+/// The fields in [template] that have no value in [values], in order.
+List<String> missingFields(String template, Map<String, String?> values) => {
+  for (final m in RegExp(r'\{(\w+)(?::\d+)?\}').allMatches(template))
+    if ((values[m[1]]?.trim() ?? '').isEmpty) m[1]!,
+}.toList();
+
+/// What a template makes of a comic that has every field.
+const sampleValues = {
+  'series': 'Saga',
+  'number': '1',
+  'year': '2012',
+  'volume': '2012',
+  'publisher': 'Image Comics',
+  'title': 'Chapter One',
+};

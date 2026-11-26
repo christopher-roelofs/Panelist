@@ -249,6 +249,16 @@ newer).
   never overwritten; emptied folders are removed (never the library
   folder). Book IDs are content-based, so only the stored path changes.
   The template used last is remembered.
+- One library folder (decided): Settings → Library folder chooses or
+  changes it (`setLibraryFolder`; the old folder's comics leave the library,
+  files and progress kept). "Organize library" (library toolbar and the
+  library folder screen) runs the rename preview over the whole library
+  with layouts By publisher (`{publisher}/{series} ({volume})/…`), By
+  series, Files only, or Custom; progress and Stop (what moved stays
+  moved). Emptied folders are removed deepest first; folders with other
+  files stay. "Keep organized" (off by default) files a comic by the last
+  template as soon as its details are saved by lookup or the editor; new
+  files found by a scan are not moved.
 - Publisher names (M6 step 5): the user's own rules (none built in), from
   → to, compared ignoring case and punctuation. Used for library grouping
   and display, for lookups before saving, and for `{publisher}` in renames.

@@ -17,6 +17,7 @@ import 'info_lookup.dart';
 import 'library_model.dart';
 import 'library_scanner.dart';
 import 'library_view.dart' show LibraryCover;
+import 'rename_comics.dart';
 
 /// Whether this platform edits metadata (desktop: the library lives there,
 /// and batch tagging is desk work).
@@ -302,8 +303,11 @@ class _ComicInfoEditorState extends ConsumerState<ComicInfoEditor> {
     if (info != null && bookId != null) {
       await ref.read(databaseProvider).saveMetadata(bookId, metadataFrom(info));
     }
+    final moved = await keepOrganized(ref, _comic, doc) != _comic.location;
     unawaited(ref.read(libraryScanProvider.notifier).scan());
-    messenger.showSnackBar(const SnackBar(content: Text('Saved')));
+    messenger.showSnackBar(
+      SnackBar(content: Text(moved ? 'Saved and filed' : 'Saved')),
+    );
     navigator.pop(true);
   }
 
