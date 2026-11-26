@@ -82,11 +82,23 @@ void main() {
         number: const Value('1'),
       ),
     );
+    await db.putEntry(
+      LibraryEntriesCompanion.insert(
+        location: p.join(dir.path, 'Saga 002 (2012).cbz'),
+        rootId: root.id,
+        folder: 'Image Comics',
+        fileName: 'Saga 002 (2012).cbz',
+        size: 1,
+        modified: 0,
+        bookId: const Value('saga2'),
+      ),
+    );
     File(p.join(covers.path, 'saga1.png')).writeAsBytesSync(pngHeader(10, 15));
     server = LibraryServer(
       db: db,
       coversDir: covers,
       openSource: openSource,
+      id: 'pc1',
       name: 'Desktop',
       clock: () => now,
       random: Random(1),
@@ -152,7 +164,7 @@ void main() {
     final token = await pair();
     final r = await call('GET', 'library', token: token);
     final comics = (await json(r))['comics']! as List;
-    final saga = RemoteComic.fromJson(comics.single as Map<String, Object?>);
+    final saga = RemoteComic.fromJson(comics.first as Map<String, Object?>);
     expect(saga.id, 'saga1');
     expect(saga.folder, 'Image Comics');
     expect(saga.series, 'Saga');
@@ -253,9 +265,17 @@ void main() {
                 finished: true,
                 updated: deviceNow,
               ),
-              // A book never opened on the PC.
+              // A book only the device has: ignored.
               ProgressChange(
-                id: 'other',
+                id: 'devices-own',
+                page: 3,
+                pageCount: 20,
+                finished: false,
+                updated: deviceNow,
+              ),
+              // A book in the PC's library it never opened.
+              ProgressChange(
+                id: 'saga2',
                 page: 3,
                 pageCount: 20,
                 finished: false,
@@ -270,9 +290,11 @@ void main() {
     expect(saga.currentPage, 1);
     expect(saga.finished, isTrue);
     expect(saga.progressUpdated!.toUtc(), now);
-    final other = (await db.book('other'))!;
-    expect(other.currentPage, 3);
-    expect(other.lastOpened.toUtc(), now, reason: 'shows in Continue reading');
+    expect(await db.book('devices-own'), isNull);
+    final saga2 = (await db.book('saga2'))!;
+    expect(saga2.currentPage, 3);
+    expect(saga2.path, endsWith('Saga 002 (2012).cbz'));
+    expect(saga2.lastOpened.toUtc(), now, reason: 'shows in Continue reading');
 
     // An older change from the device loses.
     await call(

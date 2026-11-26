@@ -46,7 +46,7 @@ Page ordering: natural sort of filenames, skip non-images and junk (`__MACOSX`, 
 | M4 ✅ | Android: SAF file access, "Open with" intents, touch tuning, memory tuning on phones | Usable on Android phone + tablet |
 | M5 ✅ | Library: library folders, thumbnails, continue reading, Folders / Series / Publishers views | Home screen with Continue Reading |
 | M6 ✅ | Metadata management (desktop): book IDs that ignore metadata files; ComicInfo editor (one issue, then bulk); save into archives (CBZ in place, CBR→CBZ, via temp file); Metron and Comic Vine lookup; rename/organise by template, promo clean-up, publisher aliases. Builds on the ComicTools ideas | The PC library can be tagged and organised from Panelist |
-| M7 | Library over the local network: the desktop app serves the library (OPDS-style); phone/tablet browse, read or download from it, and send reading progress back (also for comics copied onto the device). Metadata is edited on the PC only | Progress read on the tablet shows on the PC |
+| M7 ✅ | Library over the local network: the desktop app serves the library (OPDS-style); phone/tablet browse, read or download from it, and send reading progress back (also for comics copied onto the device). Metadata is edited on the PC only | Progress read on the tablet shows on the PC |
 | Later | RTL manga, webtoon scroll, panel zoom, OPDS 1.2 + PSE served for other apps (Panels, Chunky), OPDS/Komga client, Windows/macOS/iOS, AVIF/JXL | |
 
 ## M7 plan: the library over the local network
@@ -109,13 +109,13 @@ while looking for PCs.
 2. ✅ Server: info, pairing, library, covers, file, pages, progress; tested
    in-process.
 3. ✅ PC settings: share switch, pairing code, devices.
-4. Discovery: advertise (✅, checked with an mDNS query) and browse;
-   manual address.
-5. Client: connect and pair, browse a PC's library, read (remote pages,
-   cache), download.
-6. Progress sync both ways.
-7. Live test: Linux PC ↔ Android tablet over Wi-Fi. Done when progress
-   read on the tablet shows on the PC.
+4. ✅ Discovery: advertise and browse; manual address.
+5. ✅ Client: connect and pair, browse a PC's library, read (remote pages),
+   download (page cache on disk: later).
+6. ✅ Progress sync both ways.
+7. ✅ Live test: Linux PC ↔ Android tablet (LineageOS) over Wi-Fi: progress
+   read on the tablet showed on the PC (2026-11-25). LineageOS may turn an
+   app's network access off on install (App info → Mobile data & Wi-Fi).
 
 ## Distribution (before the first release)
 

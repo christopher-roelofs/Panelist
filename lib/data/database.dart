@@ -117,6 +117,9 @@ class PairedDevices extends Table {
 /// A computer's shared library this device has paired with.
 class RemoteLibraries extends Table {
   IntColumn get id => integer().autoIncrement()();
+
+  /// The computer's library ID (it stays when the address changes).
+  TextColumn get serverId => text().unique()();
   TextColumn get name => text()();
 
   /// `host:port` last reached at.
@@ -126,6 +129,10 @@ class RemoteLibraries extends Table {
   /// The server's time of the last sync (changes after it are fetched
   /// next), or null before the first.
   DateTimeColumn get syncedUntil => dateTime().nullable()();
+
+  /// This device's time when it last sent its changes (changes after it go
+  /// next), or null before the first.
+  DateTimeColumn get sentUntil => dateTime().nullable()();
 }
 
 @DriftDatabase(
@@ -294,6 +301,59 @@ class AppDatabase extends _$AppDatabase {
     pairedDevices,
   )..orderBy([(d) => OrderingTerm(expression: d.added)])).watch();
 
+  Stream<List<RemoteLibrary>> watchRemoteLibraries() => (select(
+    remoteLibraries,
+  )..orderBy([(r) => OrderingTerm(expression: r.name)])).watch();
+
+  Future<List<RemoteLibrary>> remoteLibraryList() =>
+      select(remoteLibraries).get();
+
+  /// Adds a paired library, or updates the one with the same [serverId]
+  /// (paired again). Returns its row ID.
+  Future<int> saveRemoteLibrary({
+    required String serverId,
+    required String name,
+    required String address,
+    required String token,
+  }) async {
+    await into(remoteLibraries).insert(
+      RemoteLibrariesCompanion.insert(
+        serverId: serverId,
+        name: name,
+        address: address,
+        token: token,
+      ),
+      onConflict: DoUpdate(
+        (_) => RemoteLibrariesCompanion(
+          name: Value(name),
+          address: Value(address),
+          token: Value(token),
+        ),
+        target: [remoteLibraries.serverId],
+      ),
+    );
+    return (await (select(
+      remoteLibraries,
+    )..where((r) => r.serverId.equals(serverId))).getSingle()).id;
+  }
+
+  Future<void> updateRemoteLibrary(int id, RemoteLibrariesCompanion data) =>
+      (update(remoteLibraries)..where((r) => r.id.equals(id))).write(data);
+
+  Future<void> removeRemoteLibrary(int id) =>
+      (delete(remoteLibraries)..where((r) => r.id.equals(id))).go();
+
+  /// Names books that synced before their library's list was here (so
+  /// were titled by their ID): [titles] maps book ID to title.
+  Future<void> nameUntitledBooks(Map<String, String> titles) =>
+      transaction(() async {
+        for (final MapEntry(key: id, value: title) in titles.entries) {
+          await (update(books)
+                ..where((b) => b.id.equals(id) & b.title.equals(id)))
+              .write(BooksCompanion(title: Value(title)));
+        }
+      });
+
   /// Applies a reading position from another device if it's newer than
   /// what's here (the latest change wins). A book never opened here gets a
   /// row at [path]; one being read (not finished, past the first page)
@@ -335,13 +395,15 @@ class AppDatabase extends _$AppDatabase {
     return true;
   });
 
-  /// Reading positions changed after [since] (all of them when null).
+  /// Reading positions changed since [since] (all of them when null). Times
+  /// are stored to the second, so one in the same second is included: a
+  /// change sent twice is harmless, one never sent isn't.
   Future<List<ProgressChange>> progressChangedSince(DateTime? since) async {
     final q = select(books)
       ..where(
         (b) => since == null
             ? b.progressUpdated.isNotNull()
-            : b.progressUpdated.isBiggerThanValue(since),
+            : b.progressUpdated.isBiggerOrEqualValue(since),
       );
     return [
       for (final b in await q.get())

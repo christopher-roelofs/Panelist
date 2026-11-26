@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:bonsoir/bonsoir.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,7 @@ import '../app/providers.dart';
 import '../core/sources/open_source.dart';
 import '../data/database.dart';
 import '../library/library_scanner.dart';
+import '../library/publisher_aliases.dart';
 import 'library_server.dart';
 import 'share_protocol.dart';
 
@@ -19,6 +21,16 @@ final canShareLibrary =
     !kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS);
 
 const shareLibraryKey = 'share.enabled';
+const shareIdKey = 'share.id';
+
+/// A random ID for this computer's shared library.
+String newLibraryId() {
+  final r = Random.secure();
+  return List.generate(
+    16,
+    (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
+}
 
 /// Whether the library is being shared, and how to reach it.
 class ShareState {
@@ -84,8 +96,18 @@ class LibrarySharing extends Notifier<ShareState> {
 
   Future<void> _start() async {
     if (_server != null) return;
+    final db = ref.read(databaseProvider);
+    var id = await db.setting(shareIdKey);
+    if (id == null) {
+      id = newLibraryId();
+      await db.setSetting(shareIdKey, id);
+    }
     final server = LibraryServer(
-      db: ref.read(databaseProvider),
+      id: id,
+      publisherName: (p) =>
+          (ref.read(publisherAliasesProvider).value ?? const PublisherAliases())
+              .apply(p),
+      db: db,
       coversDir: ref.read(coversDirProvider),
       openSource: openSource,
     );
@@ -108,7 +130,7 @@ class LibrarySharing extends Notifier<ShareState> {
           name: 'Panelist on ${server.name}',
           type: shareServiceType,
           port: port,
-          attributes: {'api': '$apiVersion'},
+          attributes: {'api': '$apiVersion', 'id': id},
         ),
       );
       await broadcast.initialize();

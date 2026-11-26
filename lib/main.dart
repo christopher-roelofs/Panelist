@@ -19,6 +19,7 @@ import 'library/library_providers.dart';
 import 'library/library_scanner.dart';
 import 'platform/android_documents.dart';
 import 'reader/open_book.dart';
+import 'share/remote_library.dart';
 import 'share/share_settings.dart';
 
 /// `panelist [path]` opens [path] directly in the reader.
@@ -34,6 +35,7 @@ Future<void> main(List<String> args) async {
   final defaults = await ReaderDefaultsNotifier.load(db);
   final libraryPrefs = await LibraryPrefsNotifier.load(db);
   final appTheme = await AppThemeNotifier.load(db);
+  final shownLibrary = await ShownLibrary.load(db);
   final lookupCache = LookupCache(
     file: File(
       p.join((await getApplicationCacheDirectory()).path, 'lookup.json'),
@@ -54,6 +56,15 @@ Future<void> main(List<String> args) async {
           () => LibraryPrefsNotifier(libraryPrefs),
         ),
         coversDirProvider.overrideWithValue(covers),
+        shownLibraryProvider.overrideWith(() => ShownLibrary(shownLibrary)),
+        shareDirsProvider.overrideWithValue((
+          cache: Directory(
+            p.join((await getApplicationCacheDirectory()).path, 'shared'),
+          ),
+          downloads: Directory(
+            p.join((await getApplicationSupportDirectory()).path, 'downloads'),
+          ),
+        )),
         lookupCacheProvider.overrideWithValue(lookupCache),
         appThemeProvider.overrideWith(() => AppThemeNotifier(appTheme)),
       ],
@@ -84,6 +95,8 @@ class PanelistApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Sharing resumes at start when it was on.
     if (canShareLibrary) ref.watch(librarySharingProvider);
+    // Comics from paired libraries open, and progress syncs.
+    ref.watch(remoteAccessProvider);
     final theme = ref.watch(appThemeProvider);
     return DynamicColorBuilder(
       builder: (systemLight, systemDark) => MaterialApp(

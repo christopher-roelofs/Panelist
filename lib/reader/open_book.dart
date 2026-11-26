@@ -11,7 +11,6 @@ import '../core/sources/open_source.dart';
 import '../core/sources/page_source.dart';
 import '../data/book_extensions.dart';
 import '../data/database.dart';
-import '../platform/android_documents.dart';
 import 'reader_screen.dart';
 
 /// Opens [path] in the reader at its saved page, recording it in recents.
@@ -36,7 +35,7 @@ Future<void> openInReader(
   }
   var book = await db.recordOpened(
     id: source.id,
-    path: AndroidDocuments.isContentUri(path) ? path : p.absolute(path),
+    path: path.contains('://') ? path : p.absolute(path),
     title: source.title,
     pageCount: source.pageCount,
   );

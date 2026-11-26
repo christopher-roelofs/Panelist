@@ -15,7 +15,8 @@ final _entriesProvider = StreamProvider<List<LibraryEntry>>(
   (ref) => ref.watch(databaseProvider).watchEntries(),
 );
 
-final _progressProvider = StreamProvider<Map<String, BookProgress>>(
+/// Every book's reading progress, by book ID.
+final bookProgressProvider = StreamProvider<Map<String, BookProgress>>(
   (ref) => ref.watch(databaseProvider).watchProgress(),
 );
 
@@ -23,7 +24,7 @@ final _progressProvider = StreamProvider<Map<String, BookProgress>>(
 /// by the user's rules.
 final libraryComicsProvider = Provider<List<LibraryComic>>((ref) {
   final entries = ref.watch(_entriesProvider).value ?? const [];
-  final progress = ref.watch(_progressProvider).value ?? const {};
+  final progress = ref.watch(bookProgressProvider).value ?? const {};
   final aliases =
       ref.watch(publisherAliasesProvider).value ?? const PublisherAliases();
   return [

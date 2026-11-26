@@ -12,6 +12,7 @@ import 'package:panelist/library/library_model.dart';
 import 'package:panelist/library/library_providers.dart';
 import 'package:panelist/library/library_scanner.dart';
 import 'package:panelist/library/library_view.dart';
+import 'package:panelist/share/remote_library.dart';
 
 /// Right-click opens the same sheet as long-press (desktop has no
 /// long-press habit).
@@ -61,6 +62,7 @@ void main() {
           overrides: [
             databaseProvider.overrideWithValue(db),
             coversDirProvider.overrideWithValue(Directory('/nowhere')),
+            remoteLibrariesProvider.overrideWith((ref) => Stream.value([])),
             libraryRootsProvider.overrideWith(
               (ref) => Stream.value([
                 const LibraryRoot(id: 1, location: '/nowhere', name: 'C'),
@@ -113,6 +115,7 @@ void main() {
         overrides: [
           databaseProvider.overrideWithValue(db),
           coversDirProvider.overrideWithValue(Directory('/nowhere')),
+          remoteLibrariesProvider.overrideWith((ref) => Stream.value([])),
           libraryRootsProvider.overrideWith(
             (ref) => Stream.value([
               const LibraryRoot(id: 1, location: '/lib', name: 'Comics'),
@@ -165,6 +168,7 @@ void main() {
             overrides: [
               databaseProvider.overrideWithValue(db),
               coversDirProvider.overrideWithValue(Directory('/nowhere')),
+              remoteLibrariesProvider.overrideWith((ref) => Stream.value([])),
               libraryRootsProvider.overrideWith(
                 (ref) => Stream.value([
                   const LibraryRoot(id: 1, location: '/nowhere', name: 'C'),

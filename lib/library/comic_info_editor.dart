@@ -27,7 +27,9 @@ bool get canEditMetadata =>
 /// Whether [location] is a file whose ComicInfo Panelist can save: a ZIP
 /// (CBZ, or a ZIP misnamed .cbr). Other formats come later.
 bool isEditableComic(String location) {
-  if (!canEditMetadata || AndroidDocuments.isContentUri(location)) {
+  if (!canEditMetadata ||
+      AndroidDocuments.isContentUri(location) ||
+      isRemoteLocation(location)) {
     return false;
   }
   try {

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../app/providers.dart';
 import '../core/metadata/cbz_converter.dart';
+import '../core/sources/open_source.dart';
 import '../data/database.dart';
 import '../platform/android_documents.dart';
 import 'comic_info_editor.dart';
@@ -20,6 +21,7 @@ const _convertibleExtensions = {'.cbr', '.cb7', '.cbt', '.rar', '.7z', '.tar'};
 bool isConvertibleComic(LibraryComic comic) =>
     canEditMetadata &&
     !AndroidDocuments.isContentUri(comic.location) &&
+    !isRemoteLocation(comic.location) &&
     _convertibleExtensions.contains(
       p.extension(comic.entry.fileName).toLowerCase(),
     );

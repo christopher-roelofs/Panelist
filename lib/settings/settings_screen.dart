@@ -9,6 +9,7 @@ import '../library/info_lookup.dart';
 import '../library/library_providers.dart';
 import '../library/library_settings_screen.dart';
 import '../library/publisher_names_screen.dart';
+import '../share/remote_settings.dart';
 import '../share/share_settings.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -104,6 +105,17 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
           heading('Library'),
+          ListTile(
+            leading: const Icon(Icons.lan_outlined),
+            title: const Text('Libraries on this network'),
+            subtitle: const Text('Read from a computer sharing its library'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const RemoteLibrariesScreen(),
+              ),
+            ),
+          ),
           if (canShareLibrary)
             ListTile(
               leading: const Icon(Icons.wifi_tethering),

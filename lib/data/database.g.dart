@@ -2840,6 +2840,18 @@ class $RemoteLibrariesTable extends RemoteLibraries
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _serverIdMeta = const VerificationMeta(
+    'serverId',
+  );
+  @override
+  late final GeneratedColumn<String> serverId = GeneratedColumn<String>(
+    'server_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -2880,8 +2892,27 @@ class $RemoteLibrariesTable extends RemoteLibraries
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _sentUntilMeta = const VerificationMeta(
+    'sentUntil',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, name, address, token, syncedUntil];
+  late final GeneratedColumn<DateTime> sentUntil = GeneratedColumn<DateTime>(
+    'sent_until',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serverId,
+    name,
+    address,
+    token,
+    syncedUntil,
+    sentUntil,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -2896,6 +2927,14 @@ class $RemoteLibrariesTable extends RemoteLibraries
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('server_id')) {
+      context.handle(
+        _serverIdMeta,
+        serverId.isAcceptableOrUnknown(data['server_id']!, _serverIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_serverIdMeta);
     }
     if (data.containsKey('name')) {
       context.handle(
@@ -2930,6 +2969,12 @@ class $RemoteLibrariesTable extends RemoteLibraries
         ),
       );
     }
+    if (data.containsKey('sent_until')) {
+      context.handle(
+        _sentUntilMeta,
+        sentUntil.isAcceptableOrUnknown(data['sent_until']!, _sentUntilMeta),
+      );
+    }
     return context;
   }
 
@@ -2942,6 +2987,10 @@ class $RemoteLibrariesTable extends RemoteLibraries
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
+      )!,
+      serverId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}server_id'],
       )!,
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -2959,6 +3008,10 @@ class $RemoteLibrariesTable extends RemoteLibraries
         DriftSqlType.dateTime,
         data['${effectivePrefix}synced_until'],
       ),
+      sentUntil: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}sent_until'],
+      ),
     );
   }
 
@@ -2970,6 +3023,9 @@ class $RemoteLibrariesTable extends RemoteLibraries
 
 class RemoteLibrary extends DataClass implements Insertable<RemoteLibrary> {
   final int id;
+
+  /// The computer's library ID (it stays when the address changes).
+  final String serverId;
   final String name;
 
   /// `host:port` last reached at.
@@ -2979,22 +3035,32 @@ class RemoteLibrary extends DataClass implements Insertable<RemoteLibrary> {
   /// The server's time of the last sync (changes after it are fetched
   /// next), or null before the first.
   final DateTime? syncedUntil;
+
+  /// This device's time when it last sent its changes (changes after it go
+  /// next), or null before the first.
+  final DateTime? sentUntil;
   const RemoteLibrary({
     required this.id,
+    required this.serverId,
     required this.name,
     required this.address,
     required this.token,
     this.syncedUntil,
+    this.sentUntil,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    map['server_id'] = Variable<String>(serverId);
     map['name'] = Variable<String>(name);
     map['address'] = Variable<String>(address);
     map['token'] = Variable<String>(token);
     if (!nullToAbsent || syncedUntil != null) {
       map['synced_until'] = Variable<DateTime>(syncedUntil);
+    }
+    if (!nullToAbsent || sentUntil != null) {
+      map['sent_until'] = Variable<DateTime>(sentUntil);
     }
     return map;
   }
@@ -3002,12 +3068,16 @@ class RemoteLibrary extends DataClass implements Insertable<RemoteLibrary> {
   RemoteLibrariesCompanion toCompanion(bool nullToAbsent) {
     return RemoteLibrariesCompanion(
       id: Value(id),
+      serverId: Value(serverId),
       name: Value(name),
       address: Value(address),
       token: Value(token),
       syncedUntil: syncedUntil == null && nullToAbsent
           ? const Value.absent()
           : Value(syncedUntil),
+      sentUntil: sentUntil == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sentUntil),
     );
   }
 
@@ -3018,10 +3088,12 @@ class RemoteLibrary extends DataClass implements Insertable<RemoteLibrary> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return RemoteLibrary(
       id: serializer.fromJson<int>(json['id']),
+      serverId: serializer.fromJson<String>(json['serverId']),
       name: serializer.fromJson<String>(json['name']),
       address: serializer.fromJson<String>(json['address']),
       token: serializer.fromJson<String>(json['token']),
       syncedUntil: serializer.fromJson<DateTime?>(json['syncedUntil']),
+      sentUntil: serializer.fromJson<DateTime?>(json['sentUntil']),
     );
   }
   @override
@@ -3029,35 +3101,43 @@ class RemoteLibrary extends DataClass implements Insertable<RemoteLibrary> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'serverId': serializer.toJson<String>(serverId),
       'name': serializer.toJson<String>(name),
       'address': serializer.toJson<String>(address),
       'token': serializer.toJson<String>(token),
       'syncedUntil': serializer.toJson<DateTime?>(syncedUntil),
+      'sentUntil': serializer.toJson<DateTime?>(sentUntil),
     };
   }
 
   RemoteLibrary copyWith({
     int? id,
+    String? serverId,
     String? name,
     String? address,
     String? token,
     Value<DateTime?> syncedUntil = const Value.absent(),
+    Value<DateTime?> sentUntil = const Value.absent(),
   }) => RemoteLibrary(
     id: id ?? this.id,
+    serverId: serverId ?? this.serverId,
     name: name ?? this.name,
     address: address ?? this.address,
     token: token ?? this.token,
     syncedUntil: syncedUntil.present ? syncedUntil.value : this.syncedUntil,
+    sentUntil: sentUntil.present ? sentUntil.value : this.sentUntil,
   );
   RemoteLibrary copyWithCompanion(RemoteLibrariesCompanion data) {
     return RemoteLibrary(
       id: data.id.present ? data.id.value : this.id,
+      serverId: data.serverId.present ? data.serverId.value : this.serverId,
       name: data.name.present ? data.name.value : this.name,
       address: data.address.present ? data.address.value : this.address,
       token: data.token.present ? data.token.value : this.token,
       syncedUntil: data.syncedUntil.present
           ? data.syncedUntil.value
           : this.syncedUntil,
+      sentUntil: data.sentUntil.present ? data.sentUntil.value : this.sentUntil,
     );
   }
 
@@ -3065,78 +3145,98 @@ class RemoteLibrary extends DataClass implements Insertable<RemoteLibrary> {
   String toString() {
     return (StringBuffer('RemoteLibrary(')
           ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
           ..write('name: $name, ')
           ..write('address: $address, ')
           ..write('token: $token, ')
-          ..write('syncedUntil: $syncedUntil')
+          ..write('syncedUntil: $syncedUntil, ')
+          ..write('sentUntil: $sentUntil')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, address, token, syncedUntil);
+  int get hashCode =>
+      Object.hash(id, serverId, name, address, token, syncedUntil, sentUntil);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is RemoteLibrary &&
           other.id == this.id &&
+          other.serverId == this.serverId &&
           other.name == this.name &&
           other.address == this.address &&
           other.token == this.token &&
-          other.syncedUntil == this.syncedUntil);
+          other.syncedUntil == this.syncedUntil &&
+          other.sentUntil == this.sentUntil);
 }
 
 class RemoteLibrariesCompanion extends UpdateCompanion<RemoteLibrary> {
   final Value<int> id;
+  final Value<String> serverId;
   final Value<String> name;
   final Value<String> address;
   final Value<String> token;
   final Value<DateTime?> syncedUntil;
+  final Value<DateTime?> sentUntil;
   const RemoteLibrariesCompanion({
     this.id = const Value.absent(),
+    this.serverId = const Value.absent(),
     this.name = const Value.absent(),
     this.address = const Value.absent(),
     this.token = const Value.absent(),
     this.syncedUntil = const Value.absent(),
+    this.sentUntil = const Value.absent(),
   });
   RemoteLibrariesCompanion.insert({
     this.id = const Value.absent(),
+    required String serverId,
     required String name,
     required String address,
     required String token,
     this.syncedUntil = const Value.absent(),
-  }) : name = Value(name),
+    this.sentUntil = const Value.absent(),
+  }) : serverId = Value(serverId),
+       name = Value(name),
        address = Value(address),
        token = Value(token);
   static Insertable<RemoteLibrary> custom({
     Expression<int>? id,
+    Expression<String>? serverId,
     Expression<String>? name,
     Expression<String>? address,
     Expression<String>? token,
     Expression<DateTime>? syncedUntil,
+    Expression<DateTime>? sentUntil,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (serverId != null) 'server_id': serverId,
       if (name != null) 'name': name,
       if (address != null) 'address': address,
       if (token != null) 'token': token,
       if (syncedUntil != null) 'synced_until': syncedUntil,
+      if (sentUntil != null) 'sent_until': sentUntil,
     });
   }
 
   RemoteLibrariesCompanion copyWith({
     Value<int>? id,
+    Value<String>? serverId,
     Value<String>? name,
     Value<String>? address,
     Value<String>? token,
     Value<DateTime?>? syncedUntil,
+    Value<DateTime?>? sentUntil,
   }) {
     return RemoteLibrariesCompanion(
       id: id ?? this.id,
+      serverId: serverId ?? this.serverId,
       name: name ?? this.name,
       address: address ?? this.address,
       token: token ?? this.token,
       syncedUntil: syncedUntil ?? this.syncedUntil,
+      sentUntil: sentUntil ?? this.sentUntil,
     );
   }
 
@@ -3145,6 +3245,9 @@ class RemoteLibrariesCompanion extends UpdateCompanion<RemoteLibrary> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (serverId.present) {
+      map['server_id'] = Variable<String>(serverId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -3158,6 +3261,9 @@ class RemoteLibrariesCompanion extends UpdateCompanion<RemoteLibrary> {
     if (syncedUntil.present) {
       map['synced_until'] = Variable<DateTime>(syncedUntil.value);
     }
+    if (sentUntil.present) {
+      map['sent_until'] = Variable<DateTime>(sentUntil.value);
+    }
     return map;
   }
 
@@ -3165,10 +3271,12 @@ class RemoteLibrariesCompanion extends UpdateCompanion<RemoteLibrary> {
   String toString() {
     return (StringBuffer('RemoteLibrariesCompanion(')
           ..write('id: $id, ')
+          ..write('serverId: $serverId, ')
           ..write('name: $name, ')
           ..write('address: $address, ')
           ..write('token: $token, ')
-          ..write('syncedUntil: $syncedUntil')
+          ..write('syncedUntil: $syncedUntil, ')
+          ..write('sentUntil: $sentUntil')
           ..write(')'))
         .toString();
   }
@@ -4616,18 +4724,22 @@ typedef $$PairedDevicesTableProcessedTableManager =
 typedef $$RemoteLibrariesTableCreateCompanionBuilder =
     RemoteLibrariesCompanion Function({
       Value<int> id,
+      required String serverId,
       required String name,
       required String address,
       required String token,
       Value<DateTime?> syncedUntil,
+      Value<DateTime?> sentUntil,
     });
 typedef $$RemoteLibrariesTableUpdateCompanionBuilder =
     RemoteLibrariesCompanion Function({
       Value<int> id,
+      Value<String> serverId,
       Value<String> name,
       Value<String> address,
       Value<String> token,
       Value<DateTime?> syncedUntil,
+      Value<DateTime?> sentUntil,
     });
 
 class $$RemoteLibrariesTableFilterComposer
@@ -4641,6 +4753,11 @@ class $$RemoteLibrariesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4663,6 +4780,11 @@ class $$RemoteLibrariesTableFilterComposer
     column: $table.syncedUntil,
     builder: (column) => ColumnFilters(column),
   );
+
+  ColumnFilters<DateTime> get sentUntil => $composableBuilder(
+    column: $table.sentUntil,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
 class $$RemoteLibrariesTableOrderingComposer
@@ -4676,6 +4798,11 @@ class $$RemoteLibrariesTableOrderingComposer
   });
   ColumnOrderings<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serverId => $composableBuilder(
+    column: $table.serverId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -4698,6 +4825,11 @@ class $$RemoteLibrariesTableOrderingComposer
     column: $table.syncedUntil,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get sentUntil => $composableBuilder(
+    column: $table.sentUntil,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$RemoteLibrariesTableAnnotationComposer
@@ -4712,6 +4844,9 @@ class $$RemoteLibrariesTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get serverId =>
+      $composableBuilder(column: $table.serverId, builder: (column) => column);
+
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
 
@@ -4725,6 +4860,9 @@ class $$RemoteLibrariesTableAnnotationComposer
     column: $table.syncedUntil,
     builder: (column) => column,
   );
+
+  GeneratedColumn<DateTime> get sentUntil =>
+      $composableBuilder(column: $table.sentUntil, builder: (column) => column);
 }
 
 class $$RemoteLibrariesTableTableManager
@@ -4761,30 +4899,38 @@ class $$RemoteLibrariesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String> serverId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> address = const Value.absent(),
                 Value<String> token = const Value.absent(),
                 Value<DateTime?> syncedUntil = const Value.absent(),
+                Value<DateTime?> sentUntil = const Value.absent(),
               }) => RemoteLibrariesCompanion(
                 id: id,
+                serverId: serverId,
                 name: name,
                 address: address,
                 token: token,
                 syncedUntil: syncedUntil,
+                sentUntil: sentUntil,
               ),
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                required String serverId,
                 required String name,
                 required String address,
                 required String token,
                 Value<DateTime?> syncedUntil = const Value.absent(),
+                Value<DateTime?> sentUntil = const Value.absent(),
               }) => RemoteLibrariesCompanion.insert(
                 id: id,
+                serverId: serverId,
                 name: name,
                 address: address,
                 token: token,
                 syncedUntil: syncedUntil,
+                sentUntil: sentUntil,
               ),
           withReferenceMapper: (p0) => p0
               .map(

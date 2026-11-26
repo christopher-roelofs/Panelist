@@ -980,6 +980,7 @@ Future<void> lookUpOne(
 /// (by name, so it's cheap for the whole library).
 bool canLookUpComic(LibraryComic comic) =>
     canEditMetadata &&
+    !isRemoteLocation(comic.location) &&
     (isConvertibleComic(comic) ||
         p.extension(comic.entry.fileName).toLowerCase() == '.cbz');
 

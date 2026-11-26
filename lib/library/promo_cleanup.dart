@@ -21,6 +21,7 @@ import 'library_scanner.dart';
 /// by name, so it's cheap for a whole publisher).
 bool canCleanComic(LibraryComic comic) =>
     canEditMetadata &&
+    !isRemoteLocation(comic.location) &&
     (isConvertibleComic(comic) ||
         p.extension(comic.entry.fileName).toLowerCase() == '.cbz');
 

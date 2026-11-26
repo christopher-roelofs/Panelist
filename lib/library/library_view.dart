@@ -6,8 +6,11 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
 import '../app/providers.dart';
+import '../core/sources/open_source.dart';
 import '../data/database.dart';
 import '../reader/open_book.dart';
+import '../share/remote_library.dart';
+import '../share/remote_widgets.dart';
 import 'bulk_field_editor.dart';
 import 'comic_info_editor.dart';
 import 'convert_comics.dart';
@@ -117,8 +120,12 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(libraryPrefsProvider);
-    final roots = ref.watch(libraryRootsProvider).value;
-    final comics = ref.watch(libraryComicsProvider);
+    final roots = ref.watch(shownRootsProvider);
+    final comics = ref.watch(shownComicsProvider);
+    final remote = ref.watch(shownLibraryProvider) != null;
+    final remoteState = remote
+        ? ref.watch(remoteComicsProvider(ref.watch(shownLibraryProvider)!))
+        : null;
     final scan = ref.watch(libraryScanProvider);
 
     final slivers = <Widget>[...widget.leading];
@@ -143,7 +150,13 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
         ..add(
           SliverToBoxAdapter(
             child: query.isEmpty
-                ? _Header(prefs: prefs, onView: _onView)
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _Header(prefs: prefs, onView: _onView, remote: remote),
+                      const RemoteStatusBar(),
+                    ],
+                  )
                 : const SizedBox(height: 8),
           ),
         )
@@ -175,6 +188,12 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                 child: Text(
                   query.isNotEmpty
                       ? 'No comics match “$query”.'
+                      : remoteState != null
+                      ? (remoteState.loading
+                            ? 'Connecting…'
+                            : remoteState.error != null
+                            ? 'Nothing here yet.'
+                            : 'No comics in this library.')
                       : scan.running
                       ? 'Looking for comics…'
                       : comics.isEmpty
@@ -270,6 +289,9 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
                   unawaited(renameWithPreview(context, ref, [c]));
                 }
               : null,
+          download: isRemoteLocation(c.location)
+              ? DownloadButton(comic: c)
+              : null,
         ),
       );
     }
@@ -297,7 +319,10 @@ class _LibraryBrowserState extends ConsumerState<LibraryBrowser> {
           Navigator.of(sheet).pop();
           unawaited(renameWithPreview(context, ref, comics));
         },
-        onEdit: canEditMetadata && item.field != null
+        onEdit:
+            canEditMetadata &&
+                item.field != null &&
+                !item.members.any((c) => isRemoteLocation(c.location))
             ? () {
                 Navigator.of(sheet).pop();
                 final (field, label, current) = item.field!;
@@ -534,8 +559,14 @@ class _SetUpLibrary extends ConsumerWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.prefs, required this.onView});
+  const _Header({
+    required this.prefs,
+    required this.onView,
+    this.remote = false,
+  });
 
+  /// Showing a computer's shared library (its comics are edited there).
+  final bool remote;
   final LibraryPrefs prefs;
   final ValueChanged<LibraryView> onView;
 
@@ -550,7 +581,7 @@ class _Header extends StatelessWidget {
           spacing: 12,
           runSpacing: 8,
           children: [
-            Text('Library', style: Theme.of(context).textTheme.titleMedium),
+            const LibrarySourcePicker(),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -576,13 +607,13 @@ class _Header extends StatelessWidget {
                   selected: {prefs.view},
                   onSelectionChanged: (s) => onView(s.single),
                 ),
-                if (canEditMetadata)
+                if (canEditMetadata && !remote)
                   IconButton(
                     tooltip: 'Look up info',
                     icon: const Icon(Icons.travel_explore),
                     onPressed: () => lookUpLibrary(context, ref),
                   ),
-                if (canEditMetadata)
+                if (canEditMetadata && !remote)
                   IconButton(
                     tooltip: 'Organize library',
                     icon: const Icon(Icons.account_tree_outlined),
@@ -887,9 +918,13 @@ class _DetailsSheet extends StatelessWidget {
     required this.onLookUp,
     required this.onClean,
     required this.onRename,
+    this.download,
   });
 
   final LibraryComic comic;
+
+  /// For a comic in a computer's shared library: download it.
+  final Widget? download;
 
   /// Renames the file by the name template; null where it can't be.
   final VoidCallback? onRename;
@@ -947,6 +982,7 @@ class _DetailsSheet extends StatelessWidget {
                 showUnread: comic.readState != ReadState.unread,
                 onMark: onMark,
                 extra: [
+                  ?download,
                   if (onEdit != null)
                     OutlinedButton.icon(
                       onPressed: onEdit,
@@ -988,7 +1024,9 @@ class _DetailsSheet extends StatelessWidget {
                   Text('to edit its details', style: theme.textTheme.bodySmall),
                 ],
               ),
-            ] else if (onEdit == null && canEditMetadata) ...[
+            ] else if (onEdit == null &&
+                canEditMetadata &&
+                download == null) ...[
               const SizedBox(height: 8),
               Text(
                 'PDF details can’t be edited.',
@@ -1133,15 +1171,7 @@ class _GroupSheet extends StatelessWidget {
     final convertible = item.members.where(isConvertibleComic).toList();
     final renamable = item.members.where(canRenameComic).toList();
     // CBZ (by name, to stay cheap) and anything convertible to it.
-    final taggable = canEditMetadata
-        ? item.members
-              .where(
-                (c) =>
-                    isConvertibleComic(c) ||
-                    c.entry.fileName.toLowerCase().endsWith('.cbz'),
-              )
-              .toList()
-        : const <LibraryComic>[];
+    final taggable = item.members.where(canLookUpComic).toList();
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),

@@ -13,6 +13,14 @@ const comicFileExtensions = [
   'zip', 'rar', '7z', 'tar',
 ];
 
+/// Whether [location] is a comic in a computer's shared library
+/// (`panelist://<library>/<book>`), read over the network.
+bool isRemoteLocation(String location) => location.startsWith('panelist://');
+
+/// Opens `panelist://` locations (comics in a computer's shared library);
+/// set by the app.
+Future<PageSource> Function(String location)? remoteOpener;
+
 /// Opens [path] with the right [PageSource] for its format. On Android,
 /// [path] may also be a `content://` document URI.
 ///
@@ -20,6 +28,11 @@ const comicFileExtensions = [
 /// mislabelled comics (e.g. a ZIP named `.cbr`) are common.
 Future<PageSource> openSource(String path) async {
   if (AndroidDocuments.isContentUri(path)) return _openDocument(path);
+  if (isRemoteLocation(path)) {
+    final open = remoteOpener;
+    if (open == null) throw UnsupportedSourceException('Not found: $path');
+    return open(path);
+  }
   // Only comic files: a folder of loose images isn't a comic.
   return switch (await FileSystemEntity.type(path)) {
     FileSystemEntityType.file => _openFile(path),

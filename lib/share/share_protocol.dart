@@ -32,19 +32,21 @@ class RemoteComic {
     this.title,
   });
 
-  factory RemoteComic.fromEntry(LibraryEntry e) => RemoteComic(
-    id: e.bookId!,
-    folder: e.folder,
-    fileName: e.fileName,
-    size: e.size,
-    pageCount: e.pageCount,
-    series: e.series,
-    number: e.number,
-    volume: e.volume,
-    year: e.year,
-    publisher: e.publisher,
-    title: e.title,
-  );
+  /// [publisher] overrides the entry's (named by the user's rules).
+  factory RemoteComic.fromEntry(LibraryEntry e, {String? publisher}) =>
+      RemoteComic(
+        id: e.bookId!,
+        folder: e.folder,
+        fileName: e.fileName,
+        size: e.size,
+        pageCount: e.pageCount,
+        series: e.series,
+        number: e.number,
+        volume: e.volume,
+        year: e.year,
+        publisher: publisher ?? e.publisher,
+        title: e.title,
+      );
 
   factory RemoteComic.fromJson(Map<String, Object?> j) => RemoteComic(
     id: j['id']! as String,

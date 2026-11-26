@@ -26,6 +26,8 @@ class LibraryServer {
     required this.db,
     required this.coversDir,
     required this.openSource,
+    required this.id,
+    this.publisherName,
     String? name,
     DateTime Function()? clock,
     Random? random,
@@ -36,6 +38,13 @@ class LibraryServer {
   final AppDatabase db;
   final Directory coversDir;
   final Future<PageSource> Function(String location) openSource;
+
+  /// The publisher as the library shows it (the user's naming rules).
+  final String? Function(String? publisher)? publisherName;
+
+  /// Stays the same across restarts and address changes, so devices know
+  /// it's the same library.
+  final String id;
 
   /// Shown to devices ("Panelist on `name`").
   final String name;
@@ -149,7 +158,7 @@ class LibraryServer {
   );
 
   Response _info(Request _) =>
-      _json({'name': name, 'app': 'panelist', 'api': apiVersion});
+      _json({'id': id, 'name': name, 'app': 'panelist', 'api': apiVersion});
 
   Future<Response> _pair(Request request) async {
     final Map<String, Object?> body;
@@ -179,7 +188,7 @@ class LibraryServer {
       added: _clock(),
     );
     onPaired?.call(device);
-    return _json({'token': token, 'name': name});
+    return _json({'token': token, 'id': id, 'name': name});
   }
 
   Future<Response> _library(Request request) async {
@@ -188,7 +197,13 @@ class LibraryServer {
         if (e.bookId != null) e,
     ];
     final body = jsonEncode({
-      'comics': [for (final e in entries) RemoteComic.fromEntry(e).toJson()],
+      'comics': [
+        for (final e in entries)
+          RemoteComic.fromEntry(
+            e,
+            publisher: publisherName?.call(e.publisher),
+          ).toJson(),
+      ],
     });
     final etag = '"${sha1.convert(utf8.encode(body))}"';
     if (request.headers['if-none-match'] == etag) {
@@ -339,6 +354,8 @@ class LibraryServer {
     final skew = sync.now == null ? Duration.zero : now.difference(sync.now!);
     for (final c in sync.changes) {
       final e = await _entry(c.id);
+      // Only books this computer has (not the device's own comics).
+      if (e == null && await db.book(c.id) == null) continue;
       await db.applyProgress(
         c.shifted(skew),
         path: e?.location ?? '',

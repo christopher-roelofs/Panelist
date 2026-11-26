@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../app/providers.dart';
 import '../core/metadata/comic_info_document.dart';
+import '../core/sources/open_source.dart';
 import '../data/database.dart';
 import '../platform/android_documents.dart';
 import 'comic_info_editor.dart';
@@ -35,7 +36,9 @@ const organizeLayouts = [
 
 /// Whether [comic]'s file can be renamed here.
 bool canRenameComic(LibraryComic comic) =>
-    canEditMetadata && !AndroidDocuments.isContentUri(comic.location);
+    canEditMetadata &&
+    !AndroidDocuments.isContentUri(comic.location) &&
+    !isRemoteLocation(comic.location);
 
 /// The values a template is filled from: ComicInfo first, then what the
 /// file and folder names say.
