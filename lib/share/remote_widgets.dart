@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/util/file_errors.dart';
 import '../library/library_model.dart';
 import 'remote_library.dart';
 import 'remote_settings.dart';
@@ -145,6 +146,10 @@ class _DownloadButtonState extends ConsumerState<DownloadButton> {
   double? _progress;
   bool _cancel = false;
 
+  /// Why the last try failed, shown by the button (a snackbar can be hidden
+  /// behind the details sheet).
+  String? _error;
+
   ({int library, String bookId})? get _where =>
       parseRemoteLocation(widget.comic.location);
 
@@ -155,11 +160,14 @@ class _DownloadButtonState extends ConsumerState<DownloadButton> {
         .comics
         .where((c) => c.id == where.bookId)
         .firstOrNull;
-    if (comic == null) return;
-    final messenger = ScaffoldMessenger.of(context);
+    if (comic == null) {
+      setState(() => _error = 'Not in the list from the computer; refresh it');
+      return;
+    }
     setState(() {
       _progress = 0;
       _cancel = false;
+      _error = null;
     });
     try {
       await ref
@@ -175,7 +183,10 @@ class _DownloadButtonState extends ConsumerState<DownloadButton> {
             cancelled: () => _cancel,
           );
     } on ShareException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted && !_cancel) setState(() => _error = e.message);
+    } on Object catch (e) {
+      // A file this device couldn't write, for example.
+      if (mounted) setState(() => _error = describeFileError(e));
     } finally {
       if (mounted) setState(() => _progress = null);
     }
@@ -209,11 +220,26 @@ class _DownloadButtonState extends ConsumerState<DownloadButton> {
         label: const Text('Downloaded · Remove'),
       );
     }
-    return OutlinedButton.icon(
+    final button = OutlinedButton.icon(
       onPressed: _download,
       icon: const Icon(Icons.download_outlined),
       label: Text('Download (${_size(widget.comic.entry.size)})'),
     );
+    if (_error case final error?) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          button,
+          const SizedBox(height: 4),
+          Text(
+            'Couldn’t download: $error',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+      );
+    }
+    return button;
   }
 }
 
@@ -302,6 +328,9 @@ class DownloadQueue extends Notifier<DownloadQueueState?> {
           _failed++;
           _lastError = e.message;
         }
+      } on Object catch (e) {
+        _failed++;
+        _lastError = describeFileError(e);
       }
       if (!ref.mounted) return;
     }

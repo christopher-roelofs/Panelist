@@ -214,6 +214,36 @@ void main() {
     expect(file.readAsBytesSync(), File(cbz).readAsBytesSync());
   });
 
+  test('download all: a file this device can’t write is reported', () async {
+    final (lib, client) = await pairDevice();
+    final comics = (await client.library())!.comics;
+    client.close();
+    // A file where the downloads folder should be: nothing can go in it.
+    final blocked = File(p.join(dir.path, 'blocked'))..writeAsStringSync('x');
+    final container = ProviderContainer(
+      overrides: [
+        databaseProvider.overrideWithValue(device),
+        coversDirProvider.overrideWithValue(
+          Directory(p.join(dir.path, 'covers2')),
+        ),
+        shareDirsProvider.overrideWithValue((
+          cache: Directory(p.join(dir.path, 'cache2')),
+          downloads: Directory(blocked.path),
+        )),
+      ],
+    );
+    addTearDown(container.dispose);
+    final keep = container.listen(downloadQueueProvider, (_, _) {});
+    addTearDown(keep.close);
+    final libs = container.listen(remoteLibrariesProvider, (_, _) {});
+    addTearDown(libs.close);
+    final done = Completer<String>();
+    container
+        .read(downloadQueueProvider.notifier)
+        .add(lib.id, comics, onDone: done.complete);
+    expect(await done.future, startsWith('Downloaded 0 comics · 1 failed: '));
+  });
+
   test('a download picks up where it stopped', () async {
     final (_, client) = await pairDevice();
     final comic = (await client.library())!.comics.single;
