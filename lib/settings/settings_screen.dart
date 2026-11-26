@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app/theme.dart';
 import '../library/comic_info_editor.dart';
+import '../library/convert_comics.dart';
 import '../library/info_lookup.dart';
 import '../library/library_providers.dart';
 import '../library/library_settings_screen.dart';
@@ -86,6 +87,7 @@ class SettingsScreen extends ConsumerWidget {
           if (canEditMetadata) ...[
             heading('Comic details'),
             const LookupSettings(),
+            const ConvertedOriginalsTile(),
             ListTile(
               leading: const Icon(Icons.business_outlined),
               title: const Text('Publisher names'),

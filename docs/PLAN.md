@@ -259,6 +259,12 @@ newer).
   files stay. "Keep organized" (off by default) files a comic by the last
   template as soon as its details are saved by lookup or the editor; new
   files found by a scan are not moved.
+- Converted originals: Settings → After converting to CBZ: move to trash
+  (default) or delete; used by every conversion.
+- Metadata features on Android/iOS (after M7, decided): write through the
+  Storage Access Framework (write/replace a document, rename, move, create
+  folder, delete) rather than All files access, so the app stays fine for
+  Google Play. No trash there: converted originals are deleted.
 - Publisher names (M6 step 5): the user's own rules (none built in), from
   → to, compared ignoring case and punctuation. Used for library grouping
   and display, for lookups before saving, and for `{publisher}` in renames.

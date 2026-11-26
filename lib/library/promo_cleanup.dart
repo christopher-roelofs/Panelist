@@ -188,6 +188,7 @@ class _PromoDialogState extends ConsumerState<_PromoDialog> {
       onProgress: (n) {
         if (mounted) setState(() => _removed = n);
       },
+      trash: await originalsRemover(ref),
     );
     if (mounted) Navigator.of(context).pop(result);
   }

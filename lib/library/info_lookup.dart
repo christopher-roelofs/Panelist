@@ -497,6 +497,7 @@ class _TagDialogState extends ConsumerState<_TagDialog> {
       aliases:
           ref.read(publisherAliasesProvider).value ?? const PublisherAliases(),
       afterSave: (comic, doc) => keepOrganized(ref, comic, doc),
+      trash: await originalsRemover(ref),
     );
     if (mounted) Navigator.of(context).pop(result);
   }
@@ -893,7 +894,8 @@ class _ChooseDialogState extends ConsumerState<_ChooseDialog> {
 }
 
 /// Looks one comic up, letting the user choose the match. A CBR/CB7/CBT is
-/// converted to CBZ first (after asking: the original goes to the trash),
+/// converted to CBZ first (after asking; the original is trashed or deleted
+/// by the user's setting),
 /// since only CBZ can hold the details.
 Future<void> lookUpOne(
   BuildContext context,
@@ -910,7 +912,7 @@ Future<void> lookUpOne(
           '${p.basename(c.location)} is a '
           '${p.extension(c.location).substring(1).toUpperCase()} file, which '
           'can’t hold comic details. It’s converted to CBZ first (same '
-          'pages, nothing recompressed) and the original goes to the trash.',
+          'pages, nothing recompressed). ${originalFate(ref)}',
         ),
         actions: [
           TextButton(
@@ -948,7 +950,9 @@ Future<void> lookUpOne(
     try {
       final conv = await convertToCbz(c.location);
       await db.moveBook(conv.oldId, conv.newId, conv.cbzPath);
-      if (File(c.location).existsSync()) await moveToTrash(c.location);
+      if (File(c.location).existsSync()) {
+        await (await originalsRemover(ref))(c.location);
+      }
       c = LibraryComic(
         c.entry.copyWith(
           location: conv.cbzPath,

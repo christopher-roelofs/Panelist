@@ -24,6 +24,75 @@ bool isConvertibleComic(LibraryComic comic) =>
       p.extension(comic.entry.fileName).toLowerCase(),
     );
 
+const convertedOriginalsKey = 'convert.originals';
+
+/// Whether converted originals are deleted outright instead of moved to the
+/// trash (the default).
+final deleteOriginalsProvider = FutureProvider<bool>(
+  (ref) async =>
+      await ref.watch(databaseProvider).setting(convertedOriginalsKey) ==
+      'delete',
+);
+
+/// Deletes [path]. True once it's gone.
+Future<bool> deleteFile(String path) async {
+  try {
+    await File(path).delete();
+  } on FileSystemException {
+    // Checked below.
+  }
+  return !File(path).existsSync();
+}
+
+/// How to get rid of a converted original, by the user's setting.
+Future<Future<bool> Function(String path)> originalsRemover(
+  WidgetRef ref,
+) async =>
+    await ref.read(deleteOriginalsProvider.future) ? deleteFile : moveToTrash;
+
+/// What happens to a converted original, for dialogs: "The original goes
+/// to the trash."
+String originalFate(WidgetRef ref) =>
+    ref.watch(deleteOriginalsProvider).value ?? false
+    ? 'The original is deleted.'
+    : Platform.isLinux
+    ? 'The original goes to the trash.'
+    : 'The original is kept.';
+
+/// Settings row: trash or delete converted originals.
+class ConvertedOriginalsTile extends ConsumerWidget {
+  const ConvertedOriginalsTile({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final delete = ref.watch(deleteOriginalsProvider).value ?? false;
+    return ListTile(
+      leading: const Icon(Icons.delete_sweep_outlined),
+      title: const Text('After converting to CBZ'),
+      subtitle: Text(
+        delete
+            ? 'The CBR/CB7/CBT original is deleted'
+            : 'The CBR/CB7/CBT original goes to the trash',
+      ),
+      trailing: DropdownButton<bool>(
+        value: delete,
+        underline: const SizedBox(),
+        items: const [
+          DropdownMenuItem(value: false, child: Text('Move to trash')),
+          DropdownMenuItem(value: true, child: Text('Delete')),
+        ],
+        onChanged: (v) async {
+          if (v == null) return;
+          await ref
+              .read(databaseProvider)
+              .setSetting(convertedOriginalsKey, v ? 'delete' : 'trash');
+          ref.invalidate(deleteOriginalsProvider);
+        },
+      ),
+    );
+  }
+}
+
 /// Moves [path] to the desktop's trash. False if there's no trash to use
 /// (the file is then left where it is).
 Future<bool> moveToTrash(String path) async {
@@ -133,6 +202,7 @@ class _ConvertDialogState extends ConsumerState<_ConvertDialog> {
         if (mounted) setState(() => _done = done);
       },
       shouldStop: () => _stopping,
+      trash: await originalsRemover(ref),
     );
     if (mounted) Navigator.of(context).pop(result);
   }
@@ -156,7 +226,7 @@ class _ConvertDialogState extends ConsumerState<_ConvertDialog> {
             Text(
               'Makes a CBZ of $what with the same pages, so its details can '
               'be edited. Reading progress carries over. '
-              '${Platform.isLinux ? 'The original goes to the trash.' : 'The original is kept.'}',
+              '${originalFate(ref)}',
               style: theme.textTheme.bodyMedium,
             ),
             if (done != null) ...[
